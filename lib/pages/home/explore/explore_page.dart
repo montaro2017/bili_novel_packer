@@ -1,35 +1,29 @@
 import 'package:bili_novel_packer/exception.dart';
 import 'package:bili_novel_packer/novel_source/base/novel_model.dart';
 import 'package:bili_novel_packer/novel_source/base/novel_source.dart';
-import 'package:bili_novel_packer/page/detail/detail_page.dart';
-import 'package:bili_novel_packer/page/home/novel_section_widget.dart';
-import 'package:bili_novel_packer/page/search/search_page.dart';
+import 'package:bili_novel_packer/pages/detail/detail_page.dart';
+import 'package:bili_novel_packer/pages/home/novel_section_widget.dart';
 import 'package:flutter/material.dart';
 
-class HomePage extends StatelessWidget {
-  const HomePage({super.key});
+class ExplorePage extends StatefulWidget {
+  const ExplorePage({super.key});
 
   @override
+  State<StatefulWidget> createState() {
+    return _ExplorePageState();
+  }
+}
+
+class _ExplorePageState extends State<ExplorePage> with AutomaticKeepAliveClientMixin {
+  @override
   Widget build(BuildContext context) {
+    super.build(context);
     var sources = NovelSource.sources;
     return DefaultTabController(
       length: sources.length,
       child: Scaffold(
         appBar: AppBar(
-          title: Text('BiliNovelPacker'),
-          actions: [
-            IconButton(
-              onPressed: () {
-                Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (context) => SearchPage(),
-                  ),
-                );
-              },
-              icon: Icon(Icons.search),
-            ),
-          ],
-          bottom: TabBar(
+          title: TabBar(
             tabs: sources.map((s) => _toTab(s)).toList(),
           ),
         ),
@@ -43,6 +37,9 @@ class HomePage extends StatelessWidget {
   Tab _toTab(NovelSource source) {
     return Tab(text: source.name);
   }
+
+  @override
+  bool get wantKeepAlive => true;
 }
 
 class _NovelSourceHomeWidget extends StatefulWidget {
