@@ -81,7 +81,7 @@ class _NovelCardState extends State<NovelCard> {
                       fit: BoxFit.cover,
                     )
                   : Container(
-                      color: Theme.of(context).primaryColorLight,
+                      color: Theme.of(context).colorScheme.primaryContainer,
                       child: Center(child: Icon(Icons.info)),
                     ),
             ),
@@ -140,7 +140,7 @@ class _NovelCardState extends State<NovelCard> {
       borderRadius: BorderRadius.circular(16),
       child: Container(
         padding: EdgeInsetsGeometry.symmetric(horizontal: 8, vertical: 2),
-        color: Theme.of(context).primaryColorLight,
+        color: Theme.of(context).colorScheme.primaryContainer,
         child: Text(tag, style: TextStyle(fontSize: 12)),
       ),
     );

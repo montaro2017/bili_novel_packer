@@ -19,16 +19,11 @@ class _SearchPageState extends State<SearchPage>
   Widget build(BuildContext context) {
     super.build(context);
     var breakPoint = App.breakPoint(context);
-    var useSplitView = breakPoint >= BreakPoint.md;
+    var useSplitView = breakPoint > BreakPoint.sm;
     Widget searchView = _SearchView(key: _searchViewKey);
     searchView = useSplitView
-        ? SizedBox(
-            width: 375,
-            child: searchView,
-          )
-        : Expanded(
-            child: searchView,
-          );
+        ? SizedBox(width: 375, child: searchView)
+        : Expanded(child: searchView);
     return Scaffold(
       body: Row(
         crossAxisAlignment: CrossAxisAlignment.start,

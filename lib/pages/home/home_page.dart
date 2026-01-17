@@ -44,27 +44,29 @@ class _HomePageState extends State<HomePage> {
     bool mobileLayout = breakPoint < BreakPoint.sm;
     return Scaffold(
       bottomNavigationBar: mobileLayout ? _navigationBar() : null,
-      body: Row(
-        children: [
-          if (!mobileLayout)
-            Row(
-              children: [
-                NavigationRail(
-                  destinations: _navigationRailDestinations,
-                  selectedIndex: _selectedIndex,
-                  onDestinationSelected: _setSelectedIndex,
-                  labelType: .all,
-                ),
-                VerticalDivider(thickness: 1, width: 1),
-              ],
+      body: SafeArea(
+        child: Row(
+          children: [
+            if (!mobileLayout)
+              Row(
+                children: [
+                  NavigationRail(
+                    destinations: _navigationRailDestinations,
+                    selectedIndex: _selectedIndex,
+                    onDestinationSelected: _setSelectedIndex,
+                    labelType: .all,
+                  ),
+                  VerticalDivider(thickness: 1, width: 1),
+                ],
+              ),
+            Expanded(
+              child: IndexedStack(
+                index: _selectedIndex,
+                children: _widgets,
+              ),
             ),
-          Expanded(
-            child: IndexedStack(
-              index: _selectedIndex,
-              children: _widgets,
-            ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

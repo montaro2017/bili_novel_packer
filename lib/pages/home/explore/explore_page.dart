@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:bili_novel_packer/exception.dart';
 import 'package:bili_novel_packer/novel_source/base/novel_model.dart';
 import 'package:bili_novel_packer/novel_source/base/novel_source.dart';
@@ -14,23 +16,54 @@ class ExplorePage extends StatefulWidget {
   }
 }
 
-class _ExplorePageState extends State<ExplorePage> with AutomaticKeepAliveClientMixin {
+class _ExplorePageState extends State<ExplorePage>
+    with AutomaticKeepAliveClientMixin, SingleTickerProviderStateMixin {
+  late final TabController _controller;
+  late final Map<NovelSource, GlobalKey<_NovelSourceHomeWidgetState>> _keyMap;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TabController(
+      length: NovelSource.sources.length,
+      vsync: this,
+    );
+    _keyMap = {};
+    for (var s in NovelSource.sources) {
+      _keyMap[s] = GlobalKey<_NovelSourceHomeWidgetState>();
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     super.build(context);
+    bool isDesktop = Platform.isWindows || Platform.isLinux || Platform.isMacOS;
     var sources = NovelSource.sources;
-    return DefaultTabController(
-      length: sources.length,
-      child: Scaffold(
-        appBar: AppBar(
-          title: TabBar(
-            tabs: sources.map((s) => _toTab(s)).toList(),
-          ),
-        ),
-        body: TabBarView(
-          children: sources.map((s) => _NovelSourceHomeWidget(s)).toList(),
+    return Scaffold(
+      appBar: AppBar(
+        title: TabBar(
+          controller: _controller,
+          tabs: sources.map((s) => _toTab(s)).toList(),
         ),
       ),
+      body: TabBarView(
+        controller: _controller,
+        children: sources
+            .map((s) => _NovelSourceHomeWidget(s, key: _keyMap[s]))
+            .toList(),
+      ),
+      floatingActionButton: isDesktop
+          ? FloatingActionButton(
+              onPressed: () {
+                var currentSource = NovelSource.sources.elementAtOrNull(
+                  _controller.index,
+                );
+                var key = _keyMap[currentSource];
+                key?.currentState?._loadData();
+              },
+              child: Icon(Icons.refresh),
+            )
+          : null,
     );
   }
 
@@ -45,7 +78,7 @@ class _ExplorePageState extends State<ExplorePage> with AutomaticKeepAliveClient
 class _NovelSourceHomeWidget extends StatefulWidget {
   final NovelSource source;
 
-  const _NovelSourceHomeWidget(this.source);
+  const _NovelSourceHomeWidget(this.source, {super.key});
 
   @override
   State<StatefulWidget> createState() {
@@ -78,7 +111,7 @@ class _NovelSourceHomeWidgetState extends State<_NovelSourceHomeWidget>
     }
   }
 
-  void _loadData() async {
+  Future<void> _loadData() async {
     setState(() {
       loading = true;
     });
@@ -122,9 +155,7 @@ class _NovelSourceHomeWidgetState extends State<_NovelSourceHomeWidget>
               Padding(
                 padding: EdgeInsetsGeometry.only(top: 10),
                 child: ElevatedButton(
-                  onPressed: () {
-                    _loadData();
-                  },
+                  onPressed: _loadData,
                   child: Text('重试'),
                 ),
               ),
@@ -136,6 +167,7 @@ class _NovelSourceHomeWidgetState extends State<_NovelSourceHomeWidget>
 
   Widget _buildExploreWidget() {
     return RefreshIndicator(
+      onRefresh: _loadData,
       child: ListView.builder(
         itemCount: sections!.length,
         itemBuilder: (context, index) {
@@ -155,7 +187,6 @@ class _NovelSourceHomeWidgetState extends State<_NovelSourceHomeWidget>
           }
         },
       ),
-      onRefresh: () async {},
     );
   }
 
