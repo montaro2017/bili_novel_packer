@@ -35,6 +35,12 @@ class _ExplorePageState extends State<ExplorePage>
   }
 
   @override
+  void dispose() {
+    super.dispose();
+    _controller.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     super.build(context);
     bool isDesktop = Platform.isWindows || Platform.isLinux || Platform.isMacOS;

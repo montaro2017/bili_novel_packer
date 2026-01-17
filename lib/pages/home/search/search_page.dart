@@ -51,6 +51,25 @@ class _SearchView extends StatefulWidget {
 
 class _SearchViewState extends State<_SearchView>
     with AutomaticKeepAliveClientMixin {
+  late final TextEditingController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController();
+    _controller.addListener(() {
+      if (mounted) {
+        setState(() {});
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    super.dispose();
+    _controller.dispose();
+  }
+
   @override
   Widget build(BuildContext context) {
     super.build(context);
@@ -59,8 +78,16 @@ class _SearchViewState extends State<_SearchView>
     return Scaffold(
       appBar: AppBar(
         title: SearchBar(
+          controller: _controller,
           constraints: BoxConstraints(maxHeight: 56),
           trailing: [
+            if (_controller.text.isNotEmpty)
+              IconButton(
+                onPressed: () {
+                  _controller.clear();
+                },
+                icon: Icon(Icons.clear),
+              ),
             IconButton(onPressed: () {}, icon: Icon(Icons.search)),
           ],
           hintText: "关键字 / 链接 / ID",
