@@ -13,6 +13,8 @@ abstract class NovelSource {
 
   String get name;
 
+  String get userAgent;
+
   Future<List<NovelSection>> explore();
 
   SearchIterator<Novel> search(String keyword);

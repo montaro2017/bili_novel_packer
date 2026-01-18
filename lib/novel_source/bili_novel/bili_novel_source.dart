@@ -8,31 +8,38 @@ import 'package:bili_novel_packer/novel_source/base/novel_model.dart';
 import 'package:bili_novel_packer/novel_source/base/novel_source.dart';
 import 'package:bili_novel_packer/novel_source/bili_novel/bili_novel_secret.dart';
 import 'package:bili_novel_packer/scheduler/scheduler.dart';
+import 'package:bili_novel_packer/util/sequence.dart';
 import 'package:dio/dio.dart';
 import 'package:html/dom.dart';
 import 'package:html/parser.dart';
 import 'package:synchronized/synchronized.dart';
 
 class BiliNovelSource implements NovelSource {
+
   static final Map<String, String> secretMap = {};
   static final Scheduler _scheduler = Scheduler(15, Duration(minutes: 1));
   static final Scheduler _imageScheduler = Scheduler(10, Duration(seconds: 1));
-
-  static const String domain = "https://www.bilinovel.com";
-  static const String userAgent =
-      "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36";
   static const String cookie = "night=1";
 
   static Lock lock = Lock();
   static bool warnFlag = false;
+  static const String domain = "https://www.bilinovel.com";
 
-  final Dio dio = _dio();
+  late final Dio dio;
+
+  @override
+  String userAgent =
+      "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36";
+
+  BiliNovelSource() {
+    dio = _dio();
+  }
 
   @override
   final String name = "哔哩轻小说";
 
-  static Dio _dio() {
-    const headers = {
+  Dio _dio() {
+    var headers = {
       "Accept": "*/*",
       "Accept-Language": " zh-CN,zh;q=0.9",
       "User-Agent": userAgent,
@@ -42,9 +49,15 @@ class BiliNovelSource implements NovelSource {
     BaseOptions options = BaseOptions(
       headers: headers,
       responseType: ResponseType.plain,
+      validateStatus: (status) {
+        if (status == null) return false;
+        if (status >= 200 && status < 400) return true;
+        if (status == 403) return true;
+        return false;
+      },
     );
     var dio = Dio(options);
-    dio.interceptors.add(CloudflareInterceptor(dio));
+    dio.interceptors.add(CloudflareInterceptor(dio, this));
     return dio;
   }
 
@@ -115,7 +128,7 @@ class BiliNovelSource implements NovelSource {
   Future<Novel> loadNovel(String id) async {
     Novel novel = Novel();
 
-    String html = (await dio.get("$domain/novel/$id.html")).data.string;
+    String html = (await dio.get("$domain/novel/$id.html")).data.toString();
     var doc = parse(html);
     novel.id = id.toString();
     novel.title = doc.querySelector(".book-title")!.text;
@@ -145,9 +158,55 @@ class BiliNovelSource implements NovelSource {
   }
 
   @override
-  Future<Catalog> loadCatalog(Novel novel) {
-    // TODO: implement loadCatalog
-    throw UnimplementedError();
+  Future<Catalog> loadCatalog(Novel novel) async {
+    String html = (await dio.get(
+      "$domain/novel/${novel.id}/catalog",
+    )).data.toString();
+    var doc = parse(html);
+    var catalog = Catalog();
+    var seq = Sequence();
+    _replaceImageSrc(doc.body!);
+    Volume? volume;
+    // 如果没有卷标题 则将书名直接作为卷名
+    if (doc.querySelector(".chapter-bar") == null) {
+      volume = Volume(id: seq.next);
+    }
+    var lis = doc.querySelectorAll(".volume-chapters>li");
+    if (lis.isEmpty) {
+      // logger.i("GET $url");
+      // logger.i(html);
+      throw "目录获取为空";
+    }
+    for (var li in lis) {
+      if (li.classes.contains("chapter-bar")) {
+        if (volume != null) {
+          catalog.volumes.add(volume);
+        }
+        volume = Volume(id: seq.next)..name = li.text;
+      } else if (li.classes.contains("volume-cover")) {
+        volume?.coverUrl = li
+            .querySelector("a")
+            ?.querySelector("img")
+            ?.attributes["src"];
+      } else if (li.classes.contains("jsChapter")) {
+        var link = li.querySelector("a")!;
+        String name = link.text;
+        String? href = link.attributes["href"];
+        if (href == null || href.contains("javascript")) {
+          href = null;
+        } else {
+          href = "$domain$href";
+        }
+        if (volume != null) {
+          var chapter = Chapter(name: name);
+          volume.chapters.add(chapter);
+        }
+      }
+    }
+    if (volume != null) {
+      catalog.volumes.add(volume);
+    }
+    return catalog;
   }
 
   @override
@@ -516,58 +575,58 @@ class BiliNovelSource implements NovelSource {
   //   return arr;
   // }
 
-  // /// 处理所有img标签src
-  // _replaceImageSrc(Element element) {
-  //   List<Element> images = element.querySelectorAll("img");
-  //   for (var image in images) {
-  //     String? src = image.attributes["data-src"];
-  //     src ??= image.attributes["src"];
-  //     if (src != null) {
-  //       // 过滤src有问题的img
-  //       if (src.contains("<")) {
-  //         image.remove();
-  //         continue;
-  //       }
-  //       if (src.startsWith("//")) {
-  //         src = "https:$src";
-  //       }
-  //       image.attributes["src"] = src;
-  //     }
-  //     // 移除img无效属性
-  //     _removeImageAttr(image);
-  //     // 添加alt属性
-  //     _addAlt(image);
-  //   }
-  // }
+  /// 处理所有img标签src
+  void _replaceImageSrc(Element element) {
+    List<Element> images = element.querySelectorAll("img");
+    for (var image in images) {
+      String? src = image.attributes["data-src"];
+      src ??= image.attributes["src"];
+      if (src != null) {
+        // 过滤src有问题的img
+        if (src.contains("<")) {
+          image.remove();
+          continue;
+        }
+        if (src.startsWith("//")) {
+          src = "https:$src";
+        }
+        image.attributes["src"] = src;
+      }
+      // 移除img无效属性
+      _removeImageAttr(image);
+      // 添加alt属性
+      _addAlt(image);
+    }
+  }
 
-  // /// 移除img标签无法识别的属性
-  // _removeImageAttr(Element image) {
-  //   var attrs = [
-  //     "alt",
-  //     "class",
-  //     "dir",
-  //     "height",
-  //     "id",
-  //     "ismap",
-  //     "lang",
-  //     "longdesc",
-  //     "style",
-  //     "title",
-  //     "usemap",
-  //     "width",
-  //     "src",
-  //     "xml:lang",
-  //   ];
-  //   for (var attr in image.attributes.keys.toList()) {
-  //     if (!attrs.contains(attr as String)) {
-  //       image.attributes.remove(attr);
-  //     }
-  //   }
-  // }
+  /// 移除img标签无法识别的属性
+  void _removeImageAttr(Element image) {
+    var attrs = [
+      "alt",
+      "class",
+      "dir",
+      "height",
+      "id",
+      "ismap",
+      "lang",
+      "longdesc",
+      "style",
+      "title",
+      "usemap",
+      "width",
+      "src",
+      "xml:lang",
+    ];
+    for (var attr in image.attributes.keys.toList()) {
+      if (!attrs.contains(attr as String)) {
+        image.attributes.remove(attr);
+      }
+    }
+  }
 
-  // _addAlt(Element image, [String? alt]) {
-  //   image.attributes["alt"] = alt ?? "";
-  // }
+  void _addAlt(Element image, [String? alt]) {
+    image.attributes["alt"] = alt ?? "";
+  }
 
   // Future<String> _httpGetString(String url) {
   //   return _scheduler.run((c) async {

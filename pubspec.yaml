@@ -48,6 +48,10 @@ dependencies:
   gbk_codec: ^0.4.0
   dio_cookie_manager: ^3.3.0
   flutter_displaymode: ^0.7.0
+  desktop_webview_window:
+    git:
+      url: https://github.com/Montaro2017/desktop_webview_window
+      path: packages/desktop_webview_window
 dev_dependencies:
   flutter_test:
     sdk: flutter
@@ -71,9 +75,9 @@ flutter:
   uses-material-design: true
 
   # To add assets to your application, add an assets section, like this:
-  # assets:
-  #   - images/a_dot_burr.jpeg
-  #   - images/a_dot_ham.jpeg
+  assets:
+    - assets/epub/
+    - assets/epub/META-INF/
 
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/to/resolution-aware-images

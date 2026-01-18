@@ -1,8 +1,14 @@
+import 'package:bili_novel_packer/foundation/app.dart';
 import 'package:bili_novel_packer/pages/home/home_page.dart';
+import 'package:desktop_webview_window/desktop_webview_window.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_displaymode/flutter_displaymode.dart';
 
-void main() {
+void main(List<String> args) {
+  WidgetsFlutterBinding.ensureInitialized();
+  if (runWebViewTitleBarWidget(args)) {
+    return;
+  }
   runApp(const MyApp());
 }
 
@@ -19,16 +25,13 @@ class _MyAppState extends State<MyApp> {
   @override
   void initState() {
     super.initState();
-    try {
-      FlutterDisplayMode.setHighRefreshRate();
-    } catch (e) {
-      // ignore
-    }
+    FlutterDisplayMode.setHighRefreshRate().catchError((e) {});
   }
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
+      navigatorKey: App.navigatorKey,
       title: 'Flutter Demo',
       theme: ThemeData(
         colorScheme: .fromSeed(seedColor: Colors.deepPurple),

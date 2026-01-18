@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:bili_novel_packer/exception.dart';
+import 'package:bili_novel_packer/foundation/app.dart';
 import 'package:bili_novel_packer/novel_source/base/novel_model.dart';
 import 'package:bili_novel_packer/novel_source/base/novel_source.dart';
 import 'package:bili_novel_packer/pages/detail/detail_page.dart';
@@ -43,7 +44,6 @@ class _ExplorePageState extends State<ExplorePage>
   @override
   Widget build(BuildContext context) {
     super.build(context);
-    bool isDesktop = Platform.isWindows || Platform.isLinux || Platform.isMacOS;
     var sources = NovelSource.sources;
     return Scaffold(
       appBar: AppBar(
@@ -58,7 +58,8 @@ class _ExplorePageState extends State<ExplorePage>
             .map((s) => _NovelSourceHomeWidget(s, key: _keyMap[s]))
             .toList(),
       ),
-      floatingActionButton: isDesktop
+      // 桌面端无法使用下拉刷新 添加一个刷新按钮
+      floatingActionButton: App.isDesktop
           ? FloatingActionButton(
               onPressed: () {
                 var currentSource = NovelSource.sources.elementAtOrNull(

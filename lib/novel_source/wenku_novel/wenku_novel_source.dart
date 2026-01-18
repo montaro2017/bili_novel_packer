@@ -19,25 +19,28 @@ import 'package:synchronized/synchronized.dart';
 
 class WenkuNovelSource implements NovelSource {
   static final String domain = "https://www.wenku8.net";
-
-  static const String userAgent =
-      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/118.0.0.0 Safari/537.36";
-
   static final Lock lock = Lock();
-
   static final Scheduler _scheduler = Scheduler(20, Duration(minutes: 1));
 
-  final Dio dio = _dio();
+  late final Dio dio;
+
+  WenkuNovelSource() {
+    dio = _dio();
+  }
 
   @override
   final String name = "轻小说文库";
 
-  static Dio _dio() {
+  @override
+  String userAgent =
+      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/118.0.0.0 Safari/537.36";
+
+  Dio _dio() {
     FutureOr<String?> gbkDecoder(responseBytes, options, responseBody) {
       return gbk_bytes.decode(responseBytes);
     }
 
-    const headers = {
+    var headers = {
       "User-Agent": userAgent,
     };
     BaseOptions options = BaseOptions(
@@ -46,7 +49,7 @@ class WenkuNovelSource implements NovelSource {
       responseDecoder: gbkDecoder,
     );
     var dio = Dio(options);
-    dio.interceptors.add(CloudflareInterceptor(dio));
+    dio.interceptors.add(CloudflareInterceptor(dio, this));
     return dio;
   }
 
