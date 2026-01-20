@@ -3,7 +3,6 @@ import 'dart:typed_data';
 
 import 'package:bili_novel_packer/exception.dart';
 import 'package:bili_novel_packer/novel_source/base/cloudflare_interceptor.dart';
-import 'package:bili_novel_packer/novel_source/base/light_novel_source.dart';
 import 'package:bili_novel_packer/novel_source/base/novel_model.dart';
 import 'package:bili_novel_packer/novel_source/base/novel_source.dart';
 import 'package:bili_novel_packer/novel_source/wenku_novel/wenku_novel.dart';
@@ -21,21 +20,21 @@ class WenkuNovelSource implements NovelSource {
   static final String domain = "https://www.wenku8.net";
   static final Lock lock = Lock();
   static final Scheduler _scheduler = Scheduler(20, Duration(minutes: 1));
-
-  late final Dio dio;
-
-  WenkuNovelSource() {
-    dio = _dio();
-  }
+  static final Dio dio = _dio();
 
   @override
   final String name = "轻小说文库";
 
-  @override
-  String userAgent =
+  WenkuNovelSource._();
+
+  static final WenkuNovelSource _instance = WenkuNovelSource._();
+
+  static WenkuNovelSource get instance => _instance;
+
+  static const String userAgent =
       "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/118.0.0.0 Safari/537.36";
 
-  Dio _dio() {
+  static Dio _dio() {
     FutureOr<String?> gbkDecoder(responseBytes, options, responseBody) {
       return gbk_bytes.decode(responseBytes);
     }
@@ -49,7 +48,7 @@ class WenkuNovelSource implements NovelSource {
       responseDecoder: gbkDecoder,
     );
     var dio = Dio(options);
-    dio.interceptors.add(CloudflareInterceptor(dio, this));
+    dio.interceptors.add(CloudflareInterceptor(dio));
     return dio;
   }
 
@@ -185,7 +184,7 @@ class WenkuNovelSource implements NovelSource {
   }
 
   Document _wrapDocument(Element content) {
-    Document doc = Document.html(LightNovelSource.html);
+    Document doc = Document.html(NovelSource.html);
     var nodes = content.nodes;
     for (var node in nodes) {
       if (node is Text) {

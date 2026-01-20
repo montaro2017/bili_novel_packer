@@ -7,7 +7,7 @@ void main() {
 
   test("BiliNovel loadCatalog", () async {
     WidgetsFlutterBinding.ensureInitialized();
-    var source = BiliNovelSource();
+    var source = BiliNovelSource.instance;
     var id = "4915";
     var novel = await source.loadNovel(id);
     var catalog = await source.loadCatalog(novel);

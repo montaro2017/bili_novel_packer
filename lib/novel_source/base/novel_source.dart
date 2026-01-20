@@ -6,14 +6,15 @@ import 'package:bili_novel_packer/novel_source/wenku_novel/wenku_novel_source.da
 import 'package:html/dom.dart';
 
 abstract class NovelSource {
+  static const String html =
+      "<html xmlns='http://www.w3.org/1999/xhtml' lang='zh-CN'><body></body></html>";
+
   static List<NovelSource> sources = [
-    BiliNovelSource(),
-    WenkuNovelSource(),
+    BiliNovelSource.instance,
+    WenkuNovelSource.instance,
   ];
 
   String get name;
-
-  String get userAgent;
 
   Future<List<NovelSection>> explore();
 

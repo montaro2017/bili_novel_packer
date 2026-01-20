@@ -1,15 +1,26 @@
 import 'dart:io';
 
 import 'package:bili_novel_packer/foundation/app.dart';
-import 'package:bili_novel_packer/novel_source/base/novel_source.dart';
-import 'package:desktop_webview_window/desktop_webview_window.dart';
+import 'package:bili_novel_packer/foundation/desktop_webview.dart';
 import 'package:dio/dio.dart';
 
 class CloudflareInterceptor extends Interceptor {
   final Dio dio;
-  final NovelSource source;
+  final Map<String, String> cookies = {};
 
-  CloudflareInterceptor(this.dio, this.source);
+  CloudflareInterceptor(this.dio);
+
+  @override
+  void onRequest(RequestOptions options, RequestInterceptorHandler handler) {
+    if (cookies.isNotEmpty) {
+      options.headers[HttpHeaders.cookieHeader] = getCookies();
+    }
+    handler.next(options);
+  }
+
+  String getCookies() {
+    return cookies.entries.map((e) => "${e.key}=${e.value}").join("; ");
+  }
 
   @override
   void onResponse(
@@ -17,7 +28,14 @@ class CloudflareInterceptor extends Interceptor {
     ResponseInterceptorHandler handler,
   ) async {
     if (_isChallenge(response)) {
-      await _passChallenge(response.requestOptions.uri.toString());
+      _passChallenge(response.requestOptions.uri.toString());
+      handler.reject(
+        CloudflareException(
+          requestOptions: response.requestOptions,
+          cloudflareType: .challenge,
+        ),
+      );
+      return;
     }
     handler.resolve(response);
   }
@@ -29,27 +47,50 @@ class CloudflareInterceptor extends Interceptor {
 
   Future<void> _passChallenge(String url) async {
     if (App.isDesktop) {
-      if (await WebviewWindow.isWebviewAvailable()) {
-        await _desktopWebview(url);
-      }
+      _passChallengeDesktop(url);
+    } else if (App.isMobile) {
+      _passChallengeMobile(url);
     }
   }
 
-  Future<void> _desktopWebview(String url) async {
-    print(url);
-    var webview = await WebviewWindow.create(
-      configuration: CreateConfiguration(
-        windowWidth: 430,
-        windowHeight: 932,
-        title: "Cloudflare验证",
-        useWindowPositionAndSize: true,
-        // titleBarHeight: 0,
-        titleBarTopPadding: Platform.isMacOS ? 20 : 0,
-      ),
+  void _passChallengeDesktop(String url) async {
+    var cloudflarePass = false;
+    var webview = DesktopWebview(
+      userAgent: dio.options.headers[HttpHeaders.userAgentHeader],
+      cloudflarePassCallback: () {
+        cloudflarePass = true;
+      },
     );
-    webview.setUserAgent(source.userAgent);
+    await webview.init();
     webview.launch(url);
+    while (!cloudflarePass) {
+      await Future.delayed(Duration(milliseconds: 50));
+    }
+    var cookie = await webview.getCookie(
+      (cookie) => cookie.name.contains("cf_clearance"),
+    );
+    if (cookie == null) {
+      return;
+    }
+    var name = cookie.name.trim().replaceFirst('\u0000', '');
+    var value = cookie.value.trim().replaceFirst('\u0000', '');
+    cookies[name] = value;
+    webview.close();
   }
 
-  void _mobileWebview(String url) {}
+  void _passChallengeMobile(String url) async {}
+}
+
+class CloudflareException extends DioException {
+  final CloudflareExceptionType cloudflareType;
+
+  CloudflareException({
+    required super.requestOptions,
+    required this.cloudflareType,
+  });
+}
+
+enum CloudflareExceptionType {
+  challenge,
+  rateLimit,
 }

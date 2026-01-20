@@ -15,7 +15,6 @@ import 'package:html/parser.dart';
 import 'package:synchronized/synchronized.dart';
 
 class BiliNovelSource implements NovelSource {
-
   static final Map<String, String> secretMap = {};
   static final Scheduler _scheduler = Scheduler(15, Duration(minutes: 1));
   static final Scheduler _imageScheduler = Scheduler(10, Duration(seconds: 1));
@@ -25,20 +24,19 @@ class BiliNovelSource implements NovelSource {
   static bool warnFlag = false;
   static const String domain = "https://www.bilinovel.com";
 
-  late final Dio dio;
-
-  @override
-  String userAgent =
+  static const String userAgent =
       "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36";
 
-  BiliNovelSource() {
-    dio = _dio();
-  }
+  final Dio dio = _dio();
+
+  BiliNovelSource._();
+
+  static final BiliNovelSource instance = BiliNovelSource._();
 
   @override
   final String name = "哔哩轻小说";
 
-  Dio _dio() {
+  static Dio _dio() {
     var headers = {
       "Accept": "*/*",
       "Accept-Language": " zh-CN,zh;q=0.9",
@@ -57,7 +55,7 @@ class BiliNovelSource implements NovelSource {
       },
     );
     var dio = Dio(options);
-    dio.interceptors.add(CloudflareInterceptor(dio, this));
+    dio.interceptors.add(CloudflareInterceptor(dio));
     return dio;
   }
 
