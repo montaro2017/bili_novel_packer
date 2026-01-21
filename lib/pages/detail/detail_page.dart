@@ -1,6 +1,6 @@
 import 'package:bili_novel_packer/novel_source/base/novel_model.dart';
 import 'package:bili_novel_packer/novel_source/base/novel_source.dart';
-import 'package:bili_novel_packer/widget/error_widget.dart';
+import 'package:bili_novel_packer/widget/exception_widget.dart';
 import 'package:flutter/material.dart';
 
 class DetailPage extends StatefulWidget {
@@ -72,8 +72,8 @@ class _DetailPageState extends State<DetailPage> {
 
   Widget _error() {
     return Expanded(
-      child: ErrorRetryWidget(
-        error: error,
+      child: ExceptionWidget(
+        e: error,
         retry: _loadData,
       ),
     );

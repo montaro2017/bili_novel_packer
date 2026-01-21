@@ -52,7 +52,7 @@ dependencies:
     git:
       url: https://github.com/Montaro2017/desktop_webview_window
       path: packages/desktop_webview_window
-      ref: 44898dd
+      ref: 72f165d
 dev_dependencies:
   flutter_test:
     sdk: flutter

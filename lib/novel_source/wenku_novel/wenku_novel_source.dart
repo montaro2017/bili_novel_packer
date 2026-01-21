@@ -1,15 +1,19 @@
 import 'dart:async';
+import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:bili_novel_packer/exception.dart';
 import 'package:bili_novel_packer/novel_source/base/cloudflare_interceptor.dart';
 import 'package:bili_novel_packer/novel_source/base/novel_model.dart';
 import 'package:bili_novel_packer/novel_source/base/novel_source.dart';
+import 'package:bili_novel_packer/novel_source/base/redirect_interceptor.dart';
+import 'package:bili_novel_packer/novel_source/wenku_novel/wenku_interceptor.dart';
 import 'package:bili_novel_packer/novel_source/wenku_novel/wenku_novel.dart';
 import 'package:bili_novel_packer/scheduler/scheduler.dart';
 import 'package:bili_novel_packer/util/html_util.dart';
 import 'package:bili_novel_packer/util/sequence.dart';
 import 'package:dio/dio.dart';
+import 'package:dio/io.dart';
 import 'package:gbk_codec/gbk_codec.dart';
 import 'package:html/dom.dart';
 import 'package:html/parser.dart';
@@ -46,14 +50,25 @@ class WenkuNovelSource implements NovelSource {
       headers: headers,
       responseType: ResponseType.plain,
       responseDecoder: gbkDecoder,
+      validateStatus: (status) {
+        if (status == null) return false;
+        if (status >= 200 && status < 400) return true;
+        if (status == 403) return true;
+        return false;
+      },
     );
     var dio = Dio(options);
+    dio.interceptors.add(RedirectInterceptor(dio));
     dio.interceptors.add(CloudflareInterceptor(dio));
+    dio.interceptors.add(WenkuInterceptor(dio));
     return dio;
   }
 
   @override
-  Future<List<NovelSection>> explore() {
+  Future<List<NovelSection>> explore() async {
+    var html = (await dio.get(
+      "https://www.wenku8.net/index.php",
+    )).data.toString();
     throw NotRetryableException("轻小说文库仅支持直接搜索链接");
   }
 

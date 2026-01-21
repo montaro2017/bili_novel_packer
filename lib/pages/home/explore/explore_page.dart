@@ -1,11 +1,9 @@
-import 'dart:io';
-
-import 'package:bili_novel_packer/exception.dart';
 import 'package:bili_novel_packer/foundation/app.dart';
 import 'package:bili_novel_packer/novel_source/base/novel_model.dart';
 import 'package:bili_novel_packer/novel_source/base/novel_source.dart';
 import 'package:bili_novel_packer/pages/detail/detail_page.dart';
 import 'package:bili_novel_packer/pages/home/novel_section_widget.dart';
+import 'package:bili_novel_packer/widget/exception_widget.dart';
 import 'package:flutter/material.dart';
 
 class ExplorePage extends StatefulWidget {
@@ -95,8 +93,7 @@ class _NovelSourceHomeWidget extends StatefulWidget {
 
 class _NovelSourceHomeWidgetState extends State<_NovelSourceHomeWidget>
     with AutomaticKeepAliveClientMixin {
-  String? errorMsg;
-  bool? retryAble;
+  dynamic exception;
   List<NovelSection>? sections;
   bool loading = true;
 
@@ -111,8 +108,11 @@ class _NovelSourceHomeWidgetState extends State<_NovelSourceHomeWidget>
     super.build(context);
     if (loading) {
       return _buildLoadingWidget();
-    } else if (errorMsg != null) {
-      return _buildErrorWidget();
+    } else if (exception != null) {
+      return ExceptionWidget(
+        e: exception,
+        retry: _loadData,
+      );
     } else {
       return _buildExploreWidget();
     }
@@ -127,15 +127,9 @@ class _NovelSourceHomeWidgetState extends State<_NovelSourceHomeWidget>
       setState(() {
         sections = explore;
       });
-    } on NotRetryableException catch (e) {
-      setState(() {
-        errorMsg = e.message;
-        retryAble = false;
-      });
     } catch (e) {
       setState(() {
-        errorMsg = e.toString();
-        retryAble = true;
+        exception = e;
       });
     } finally {
       setState(() {
@@ -147,28 +141,6 @@ class _NovelSourceHomeWidgetState extends State<_NovelSourceHomeWidget>
   Widget _buildLoadingWidget() {
     return Center(
       child: CircularProgressIndicator(),
-    );
-  }
-
-  Widget _buildErrorWidget() {
-    return Padding(
-      padding: EdgeInsets.all(16),
-      child: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Text(errorMsg ?? ''),
-            if (retryAble ?? false)
-              Padding(
-                padding: EdgeInsetsGeometry.only(top: 10),
-                child: ElevatedButton(
-                  onPressed: _loadData,
-                  child: Text('重试'),
-                ),
-              ),
-          ],
-        ),
-      ),
     );
   }
 
