@@ -71,7 +71,6 @@ class CloudflareInterceptor extends Interceptor {
           !html.contains("ray-id") &&
           !html.contains("rayId") &&
           !html.contains("Ray Id")) {
-        debugPrint("cloudflare pass!");
         var cookies = await webview.getAllCookies();
         var clearance = cookies
             .where(
@@ -81,6 +80,7 @@ class CloudflareInterceptor extends Interceptor {
         if (clearance == null) {
           return;
         }
+        debugPrint("cloudflare pass!");
         String name = clearance.name.trim().replaceFirst('\u0000', '');
         var value = clearance.value.trim().replaceFirst('\u0000', '');
         this.cookies[name] = value;

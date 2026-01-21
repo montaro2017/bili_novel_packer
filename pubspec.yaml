@@ -48,11 +48,13 @@ dependencies:
   gbk_codec: ^0.4.0
   dio_cookie_manager: ^3.3.0
   flutter_displaymode: ^0.7.0
+#  desktop_webview_window:
+#    path: E:\Projects\flutter_desktop_webview\packages\desktop_webview_window
   desktop_webview_window:
     git:
       url: https://github.com/Montaro2017/desktop_webview_window
       path: packages/desktop_webview_window
-      ref: 72f165d
+      ref: c95d1fd
 dev_dependencies:
   flutter_test:
     sdk: flutter

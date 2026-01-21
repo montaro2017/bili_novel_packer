@@ -36,7 +36,7 @@ class WenkuNovelSource implements NovelSource {
   static WenkuNovelSource get instance => _instance;
 
   static const String userAgent =
-      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/118.0.0.0 Safari/537.36";
+      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36 Edg/143.0.0.0";
 
   static Dio _dio() {
     FutureOr<String?> gbkDecoder(responseBytes, options, responseBody) {
