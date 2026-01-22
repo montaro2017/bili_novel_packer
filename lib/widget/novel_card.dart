@@ -49,7 +49,7 @@ class _NovelCardState extends State<NovelCard> {
       child: InkWell(
         onTap: widget.onTap,
         child: Padding(
-          padding: EdgeInsetsGeometry.symmetric(vertical: 8, horizontal: 16),
+          padding: EdgeInsets.symmetric(vertical: 8, horizontal: 16),
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -139,7 +139,7 @@ class _NovelCardState extends State<NovelCard> {
     return ClipRRect(
       borderRadius: BorderRadius.circular(16),
       child: Container(
-        padding: EdgeInsetsGeometry.symmetric(horizontal: 8, vertical: 2),
+        padding: EdgeInsets.symmetric(horizontal: 8, vertical: 2),
         color: Theme.of(context).colorScheme.primaryContainer,
         child: Text(tag, style: TextStyle(fontSize: 12)),
       ),

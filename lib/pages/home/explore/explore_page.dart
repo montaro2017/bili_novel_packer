@@ -148,6 +148,7 @@ class _NovelSourceHomeWidgetState extends State<_NovelSourceHomeWidget>
     return RefreshIndicator(
       onRefresh: _loadData,
       child: ListView.builder(
+        physics: AlwaysScrollableScrollPhysics(),
         itemCount: sections!.length,
         itemBuilder: (context, index) {
           var section = sections![index];
@@ -158,7 +159,7 @@ class _NovelSourceHomeWidgetState extends State<_NovelSourceHomeWidget>
           );
           if (index == 0) {
             return Padding(
-              padding: EdgeInsetsGeometry.only(top: 8),
+              padding: EdgeInsets.only(top: 8),
               child: sectionWidget,
             );
           } else {

@@ -20,7 +20,7 @@ class ExceptionWidget extends StatelessWidget {
 
   Widget _fallback() {
     return Padding(
-      padding: EdgeInsets.all(16.0),
+      padding: EdgeInsets.all(16),
       child: Center(
         child: Text(e.toString()),
       ),
