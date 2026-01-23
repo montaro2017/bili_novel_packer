@@ -96,12 +96,11 @@ class _DetailPageState extends State<DetailPage> {
         child: SingleChildScrollView(
           padding: EdgeInsets.symmetric(horizontal: padding),
           child: Column(
+            spacing: 16,
             children: [
               _NovelDetail(widget.source, novel!),
-              Padding(
-                padding: EdgeInsets.symmetric(vertical: 16),
-                child: Divider(thickness: 1, height: 1),
-              ),
+              Divider(thickness: 1, height: 1),
+              _CatalogDetail(widget.source, catalog!),
             ],
           ),
         ),
@@ -137,42 +136,44 @@ class _NovelDetailState extends State<_NovelDetail> {
             Expanded(
               child: Column(
                 crossAxisAlignment: .start,
-                spacing: 8,
+                spacing: 4,
                 children: [
                   _title(),
-                  if (widget.novel.alias != null) _aliasTitle(),
+                  _source(),
+                  // if (widget.novel.alias != null) _aliasTitle(),
                   _author(),
                   _tags(),
+                  _desc(context),
                 ],
               ),
             ),
           ],
         ),
-        Padding(
-          padding:  EdgeInsets.symmetric(vertical: 16),
-          child: Divider(thickness: 1, height: 1),
-        ),
-        Column(
-          crossAxisAlignment: .start,
-          children: [
-            Text(
-              '作品简介',
-              style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800),
-            ),
-            SizedBox(height: 8),
-            Text(
-              widget.novel.description!,
-              style: TextStyle(fontSize: 14),
-            ),
-          ],
-        ),
+        // Padding(
+        //   padding: EdgeInsets.symmetric(vertical: 16),
+        //   child: Divider(thickness: 1, height: 1),
+        // ),
+        // Column(
+        //   crossAxisAlignment: .start,
+        //   children: [
+        //     Text(
+        //       '作品简介',
+        //       style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800),
+        //     ),
+        //     SizedBox(height: 8),
+        //     Text(
+        //       widget.novel.description!,
+        //       style: TextStyle(fontSize: 14),
+        //     ),
+        //   ],
+        // ),
       ],
     );
   }
 
   Widget _cover() {
     return SizedBox(
-      width: 150,
+      width: 130,
       child: AspectRatio(
         aspectRatio: 3 / 4,
         child: ClipRRect(
@@ -192,6 +193,13 @@ class _NovelDetailState extends State<_NovelDetail> {
     return Text(
       widget.novel.title,
       style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
+    );
+  }
+
+  Widget _source() {
+    return Text(
+      widget.source.name,
+      style: TextStyle(fontSize: 12),
     );
   }
 
@@ -225,9 +233,39 @@ class _NovelDetailState extends State<_NovelDetail> {
 
   Widget _tags() {
     return Wrap(
-      spacing: 4,
-      runSpacing: 4,
+      spacing: 8,
+      runSpacing: 8,
       children: widget.novel.tags!.map((tag) => _tag(tag)).toList(),
+    );
+  }
+
+  Widget _desc(BuildContext context) {
+    return InkWell(
+      onTap: () {
+        showDialog(
+          context: context,
+          builder: (context) {
+            return AlertDialog(
+              title: Text('作品简介'),
+              content: Text(widget.novel.description!),
+              actions: [
+                TextButton(
+                  onPressed: () {
+                    Navigator.of(context).pop();
+                  },
+                  child: Text('确定'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+      child: Text(
+        widget.novel.description!,
+        maxLines: 3,
+        overflow: TextOverflow.ellipsis,
+        style: TextStyle(fontSize: 14),
+      ),
     );
   }
 }
@@ -245,9 +283,57 @@ class _CatalogDetail extends StatefulWidget {
 }
 
 class _CatalogDetailState extends State<_CatalogDetail> {
+  late List<ExpansionPanel> _panels;
+  late Map<Volume, bool> _expands;
+
+  @override
+  void initState() {
+    super.initState();
+    _expands = widget.catalog.volumes.asMap().map((index, volume) {
+      return MapEntry(volume, false);
+    });
+    _panels = widget.catalog.volumes.map((volume) {
+      return ExpansionPanel(
+        headerBuilder: (context, isExpanded) {
+          return ListTile(
+            title: Text(volume.name),
+          );
+        },
+        body: Column(
+          children: volume.chapters.map((chapter) {
+            return ListTile(
+              title: Text(chapter.name),
+            );
+          }).toList(),
+        ),
+        isExpanded: _expands[volume] ?? false,
+      );
+    }).toList();
+  }
+
   @override
   Widget build(BuildContext context) {
-    // TODO: implement build
-    throw UnimplementedError();
+    return Column(
+      crossAxisAlignment: .stretch,
+      children: [
+        Text(
+          "目录",
+          style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
+        ),
+        _catalog(),
+      ],
+    );
+  }
+
+  Widget _catalog() {
+    return ExpansionPanelList(
+      expansionCallback: (index, isExpanded) {
+        setState(() {
+          var volume = widget.catalog.volumes[index];
+          _expands[volume] = isExpanded;
+        });
+      },
+      children: _panels,
+    );
   }
 }
