@@ -42,10 +42,13 @@ class Volume {
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
-      other is Volume && runtimeType == other.runtimeType && name == other.name;
+      other is Volume &&
+          runtimeType == other.runtimeType &&
+          name == other.name &&
+          id == other.id;
 
   @override
-  int get hashCode => [id, name].hashCode;
+  int get hashCode => Object.hash(id, name);
 }
 
 class Chapter {

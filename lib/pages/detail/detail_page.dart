@@ -2,6 +2,7 @@ import 'dart:typed_data';
 
 import 'package:bili_novel_packer/novel_source/base/novel_model.dart';
 import 'package:bili_novel_packer/novel_source/base/novel_source.dart';
+import 'package:bili_novel_packer/widget/collapse_panel.dart';
 import 'package:bili_novel_packer/widget/exception_widget.dart';
 import 'package:flutter/material.dart';
 
@@ -49,9 +50,11 @@ class _DetailPageState extends State<DetailPage> {
     } catch (e) {
       error = e;
     } finally {
-      setState(() {
-        loading = false;
-      });
+      if (mounted) {
+        setState(() {
+          loading = false;
+        });
+      }
     }
   }
 
@@ -60,6 +63,18 @@ class _DetailPageState extends State<DetailPage> {
     return Scaffold(
       appBar: AppBar(title: title != null ? Text(title!) : null),
       body: _buildBody(context),
+      floatingActionButton: _buttons(),
+      floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
+    );
+  }
+
+  Widget _buttons() {
+    return ElevatedButton(
+      onPressed: () {},
+      child: Row(
+        mainAxisSize: .min,
+        children: [Icon(Icons.download), Text("下载")],
+      ),
     );
   }
 
@@ -101,6 +116,7 @@ class _DetailPageState extends State<DetailPage> {
               _NovelDetail(widget.source, novel!),
               Divider(thickness: 1, height: 1),
               _CatalogDetail(widget.source, catalog!),
+              SizedBox(height: 64),
             ],
           ),
         ),
@@ -126,47 +142,26 @@ class _NovelDetailState extends State<_NovelDetail> {
 
   @override
   Widget build(BuildContext context) {
-    return Column(
+    var widgets = [
+      _title(),
+      _source(),
+      // if (widget.novel.alias != null) _aliasTitle(),
+      _author(),
+      _tags(),
+      _desc(context),
+    ];
+    return Row(
+      crossAxisAlignment: .start,
       children: [
-        Row(
-          crossAxisAlignment: .start,
-          children: [
-            _cover(),
-            SizedBox(width: 16),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: .start,
-                spacing: 4,
-                children: [
-                  _title(),
-                  _source(),
-                  // if (widget.novel.alias != null) _aliasTitle(),
-                  _author(),
-                  _tags(),
-                  _desc(context),
-                ],
-              ),
-            ),
-          ],
+        _cover(),
+        SizedBox(width: 16),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: .stretch,
+            spacing: 4,
+            children: widgets,
+          ),
         ),
-        // Padding(
-        //   padding: EdgeInsets.symmetric(vertical: 16),
-        //   child: Divider(thickness: 1, height: 1),
-        // ),
-        // Column(
-        //   crossAxisAlignment: .start,
-        //   children: [
-        //     Text(
-        //       '作品简介',
-        //       style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800),
-        //     ),
-        //     SizedBox(height: 8),
-        //     Text(
-        //       widget.novel.description!,
-        //       style: TextStyle(fontSize: 14),
-        //     ),
-        //   ],
-        // ),
       ],
     );
   }
@@ -211,12 +206,9 @@ class _NovelDetailState extends State<_NovelDetail> {
   }
 
   Widget _author() {
-    return Row(
-      spacing: 4,
-      children: [
-        Icon(Icons.person_rounded, size: 13),
-        Text(widget.novel.author!, style: TextStyle(fontSize: 13)),
-      ],
+    return Text(
+      widget.novel.author!,
+      style: TextStyle(fontSize: 13),
     );
   }
 
@@ -233,38 +225,46 @@ class _NovelDetailState extends State<_NovelDetail> {
 
   Widget _tags() {
     return Wrap(
-      spacing: 8,
-      runSpacing: 8,
+      spacing: 4,
+      runSpacing: 4,
       children: widget.novel.tags!.map((tag) => _tag(tag)).toList(),
     );
   }
 
   Widget _desc(BuildContext context) {
-    return InkWell(
-      onTap: () {
-        showDialog(
-          context: context,
-          builder: (context) {
-            return AlertDialog(
-              title: Text('作品简介'),
-              content: Text(widget.novel.description!),
-              actions: [
-                TextButton(
-                  onPressed: () {
-                    Navigator.of(context).pop();
-                  },
-                  child: Text('确定'),
-                ),
-              ],
-            );
-          },
-        );
-      },
-      child: Text(
-        widget.novel.description!,
-        maxLines: 3,
-        overflow: TextOverflow.ellipsis,
-        style: TextStyle(fontSize: 14),
+    return Material(
+      type: MaterialType.transparency,
+      borderRadius: BorderRadiusGeometry.all(Radius.circular(8)),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: () {
+          showDialog(
+            context: context,
+            builder: (context) {
+              return AlertDialog(
+                title: Text('作品简介'),
+                content: Text(widget.novel.description!),
+                actions: [
+                  TextButton(
+                    onPressed: () {
+                      Navigator.of(context).pop();
+                    },
+                    child: Text('确定'),
+                  ),
+                ],
+              );
+            },
+          );
+        },
+        child: Padding(
+          padding: EdgeInsets.all(8),
+          child: Text(
+            widget.novel.description!,
+            maxLines: 3,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(fontSize: 13),
+          ),
+        ),
       ),
     );
   }
@@ -283,32 +283,24 @@ class _CatalogDetail extends StatefulWidget {
 }
 
 class _CatalogDetailState extends State<_CatalogDetail> {
-  late List<ExpansionPanel> _panels;
-  late Map<Volume, bool> _expands;
+  final Map<Volume, bool> selectMap = {};
+
+  bool? get selectAll {
+    if (selectMap.values.every((element) => element)) {
+      return true;
+    }
+    if (selectMap.values.any((element) => element)) {
+      return null;
+    }
+    return false;
+  }
 
   @override
   void initState() {
     super.initState();
-    _expands = widget.catalog.volumes.asMap().map((index, volume) {
-      return MapEntry(volume, false);
-    });
-    _panels = widget.catalog.volumes.map((volume) {
-      return ExpansionPanel(
-        headerBuilder: (context, isExpanded) {
-          return ListTile(
-            title: Text(volume.name),
-          );
-        },
-        body: Column(
-          children: volume.chapters.map((chapter) {
-            return ListTile(
-              title: Text(chapter.name),
-            );
-          }).toList(),
-        ),
-        isExpanded: _expands[volume] ?? false,
-      );
-    }).toList();
+    for (var volume in widget.catalog.volumes) {
+      selectMap[volume] = false;
+    }
   }
 
   @override
@@ -316,24 +308,133 @@ class _CatalogDetailState extends State<_CatalogDetail> {
     return Column(
       crossAxisAlignment: .stretch,
       children: [
-        Text(
-          "目录",
-          style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
+        Row(
+          children: [
+            Text(
+              "目录",
+              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
+            ),
+            Spacer(),
+            Text("全选"),
+            SizedBox(width: 8),
+            Checkbox(
+              value: selectAll,
+              tristate: true,
+              onChanged: _toggleSelectAll,
+            ),
+            SizedBox(width: 8),
+          ],
         ),
+
+        SizedBox(height: 8),
         _catalog(),
+        SizedBox(height: 8),
       ],
     );
   }
 
+  void _toggleSelectAll(bool? value) {
+    debugPrint("selectAll: $selectAll, value: $value");
+    if (value == true) {
+      setState(() {
+        selectMap.updateAll((key, value) => true);
+      });
+    } else {
+      setState(() {
+        selectMap.updateAll((key, value) => false);
+      });
+    }
+  }
+
+  void _toggleSelect(Volume volume) {
+    setState(() {
+      selectMap[volume] = !(selectMap[volume] ?? false);
+    });
+  }
+
   Widget _catalog() {
-    return ExpansionPanelList(
-      expansionCallback: (index, isExpanded) {
-        setState(() {
-          var volume = widget.catalog.volumes[index];
-          _expands[volume] = isExpanded;
-        });
-      },
-      children: _panels,
+    var collapsePanels = widget.catalog.volumes.map((volume) {
+      return CollapsePanel(
+        decoration: BoxDecoration(
+          color: Theme.of(context).colorScheme.primaryContainer,
+          borderRadius: BorderRadius.circular(8),
+        ),
+        title: (context) {
+          var state = context.findAncestorStateOfType<CollapsePanelState>();
+          Animation<double> turns = Tween<double>(begin: 0.0, end: 0.5).animate(
+            CurvedAnimation(
+              parent: state!.controller,
+              curve: Curves.easeInOut,
+            ),
+          );
+          return Material(
+            type: MaterialType.transparency,
+            child: InkWell(
+              onTap: () {
+                _toggleSelect(volume);
+              },
+              child: Padding(
+                padding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                child: Row(
+                  children: [
+                    Checkbox(
+                      value: selectMap[volume] ?? false,
+                      onChanged: (v) {
+                        setState(() {
+                          selectMap[volume] = v!;
+                        });
+                      },
+                    ),
+                    SizedBox(width: 4),
+                    Text(volume.name),
+                    Spacer(),
+                    GestureDetector(
+                      onTap: state.toggle,
+                      child: RotationTransition(
+                        turns: turns,
+                        child: Icon(Icons.keyboard_arrow_down_sharp),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          );
+        },
+        child: (context) {
+          var chapters = volume.chapters.map((chapter) {
+            return Padding(
+              padding: EdgeInsets.symmetric(horizontal: 16),
+              child: Text(chapter.name, overflow: TextOverflow.ellipsis),
+            );
+          }).toList();
+          return Padding(
+            padding: EdgeInsets.fromLTRB(16, 0, 16, 16),
+            child: Column(
+              crossAxisAlignment: .stretch,
+              spacing: 4,
+              children: [
+                Divider(thickness: 1, height: 1),
+                SizedBox(height: 4),
+                ConstrainedBox(
+                  constraints: BoxConstraints(maxHeight: 200),
+                  child: SingleChildScrollView(
+                    child: Column(
+                      crossAxisAlignment: .start,
+                      spacing: 4,
+                      children: chapters,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          );
+        },
+      );
+    }).toList();
+    return Column(
+      spacing: 8,
+      children: collapsePanels,
     );
   }
 }
