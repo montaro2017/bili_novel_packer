@@ -1,5 +1,6 @@
 import 'package:bili_novel_packer/foundation/app.dart';
 import 'package:bili_novel_packer/pages/home/home_page.dart';
+import 'package:bot_toast/bot_toast.dart';
 import 'package:desktop_webview_window/desktop_webview_window.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_displaymode/flutter_displaymode.dart';
@@ -33,6 +34,8 @@ class _MyAppState extends State<MyApp> {
     return MaterialApp(
       navigatorKey: App.navigatorKey,
       title: 'Flutter Demo',
+      builder: BotToastInit(),
+      navigatorObservers: [BotToastNavigatorObserver()],
       theme: ThemeData(
         colorScheme: .fromSeed(seedColor: Colors.deepPurple),
         fontFamily: "MiSans",

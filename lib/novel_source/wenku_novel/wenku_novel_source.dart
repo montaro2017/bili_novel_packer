@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:bili_novel_packer/exception.dart';
@@ -13,7 +12,6 @@ import 'package:bili_novel_packer/scheduler/scheduler.dart';
 import 'package:bili_novel_packer/util/html_util.dart';
 import 'package:bili_novel_packer/util/sequence.dart';
 import 'package:dio/dio.dart';
-import 'package:dio/io.dart';
 import 'package:gbk_codec/gbk_codec.dart';
 import 'package:html/dom.dart';
 import 'package:html/parser.dart';
@@ -82,13 +80,14 @@ class WenkuNovelSource implements NovelSource {
     String url = "$domain/book/$id.htm";
     var resp = await dio.get(url);
     String html = resp.data.toString();
-    return _parseNovel(id, html);
+    return _parseNovel(id, url, html);
   }
 
-  Novel _parseNovel(String id, String html) {
+  Novel _parseNovel(String id, String url, String html) {
     WenkuNovel novel = WenkuNovel();
     var doc = parse(html);
     novel.id = id.toString();
+    novel.url = url;
     novel.title = doc
         .querySelector("#content")!
         .querySelector("table:nth-child(1)")!

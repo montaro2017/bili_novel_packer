@@ -1,19 +1,21 @@
-import 'dart:typed_data';
-
 import 'package:bili_novel_packer/novel_source/base/novel_model.dart';
 import 'package:bili_novel_packer/novel_source/base/novel_source.dart';
 import 'package:bili_novel_packer/widget/collapse_panel.dart';
 import 'package:bili_novel_packer/widget/exception_widget.dart';
+import 'package:bot_toast/bot_toast.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 class DetailPage extends StatefulWidget {
   final NovelSource source;
+  final Novel novel;
   final String novelId;
   final String? title;
 
   const DetailPage({
     super.key,
     required this.source,
+    required this.novel,
     required this.novelId,
     this.title,
   });
@@ -61,20 +63,39 @@ class _DetailPageState extends State<DetailPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: title != null ? Text(title!) : null),
+      appBar: AppBar(
+        title: title != null ? Text(title!) : null,
+        actions: [
+          PopupMenuButton(
+            itemBuilder: (BuildContext context) => [
+              PopupMenuItem(
+                child: Text('刷新'),
+                onTap: () {
+                  _loadData();
+                },
+              ),
+              PopupMenuItem(
+                child: Text('复制链接'),
+                onTap: () async {
+                  await Clipboard.setData(
+                    ClipboardData(text: widget.novel.url),
+                  );
+                  BotToast.showText(text: "复制成功");
+                },
+              ),
+            ],
+          ),
+        ],
+      ),
       body: _buildBody(context),
       floatingActionButton: _buttons(),
-      floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
     );
   }
 
   Widget _buttons() {
-    return ElevatedButton(
+    return FloatingActionButton(
       onPressed: () {},
-      child: Row(
-        mainAxisSize: .min,
-        children: [Icon(Icons.download), Text("下载")],
-      ),
+      child: Icon(Icons.download),
     );
   }
 

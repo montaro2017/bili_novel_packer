@@ -2,6 +2,8 @@ class Novel {
   // id
   late String id;
 
+  late String url;
+
   // 书名
   late String title;
 

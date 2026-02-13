@@ -102,6 +102,7 @@ class BiliNovelSource implements NovelSource {
     var anchor = bookLi.querySelector(".book-li > a");
     var href = anchor!.attributes["href"]!;
     novel.id = href.subBetween("/novel/", ".")!;
+    novel.url = "$domain/novel/${novel.id}.html";
     // 封面图
     var img = bookLi.querySelector(".book-cover > img");
     novel.coverUrl = img?.attributes["data-src"];
@@ -126,9 +127,11 @@ class BiliNovelSource implements NovelSource {
   Future<Novel> loadNovel(String id) async {
     Novel novel = Novel();
 
-    String html = (await dio.get("$domain/novel/$id.html")).data.toString();
+    String url = "$domain/novel/$id.html";
+    String html = (await dio.get(url)).data.toString();
     var doc = parse(html);
     novel.id = id.toString();
+    novel.url = url;
     novel.title = doc.querySelector(".book-title")!.text;
 
     // 解析别名信息

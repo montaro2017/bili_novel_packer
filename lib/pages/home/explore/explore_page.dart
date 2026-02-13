@@ -175,6 +175,7 @@ class _NovelSourceHomeWidgetState extends State<_NovelSourceHomeWidget>
       MaterialPageRoute(
         builder: (context) => DetailPage(
           source: widget.source,
+          novel: novel,
           novelId: novel.id,
         ),
       ),
