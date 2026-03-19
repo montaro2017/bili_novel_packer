@@ -93,8 +93,8 @@ packages:
     dependency: "direct main"
     description:
       path: "packages/desktop_webview_window"
-      ref: c95d1fd
-      resolved-ref: c95d1fd77ca735607f888e7628f6aca3a6fe9dbd
+      ref: main
+      resolved-ref: "97ed6ed0eefdc966a53dd09d65657552a0f2e006"
       url: "https://github.com/Montaro2017/desktop_webview_window"
     source: git
     version: "0.2.5"

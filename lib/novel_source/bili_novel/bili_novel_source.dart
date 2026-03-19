@@ -54,6 +54,7 @@ class BiliNovelSource implements NovelSource {
         return false;
       },
     );
+
     var dio = Dio(options);
     dio.interceptors.add(CloudflareInterceptor(dio));
     return dio;

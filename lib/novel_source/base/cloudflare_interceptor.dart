@@ -1,97 +1,58 @@
-import 'dart:io';
-
-import 'package:bili_novel_packer/foundation/app.dart';
+import 'package:bili_novel_packer/novel_source/base/base_webview_interceptor.dart';
 import 'package:bili_novel_packer/widget/exception_widget.dart';
-import 'package:desktop_webview_window/desktop_webview_window.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 
-class CloudflareInterceptor extends Interceptor {
-  final Dio dio;
-  final Map<String, String> cookies = {};
+class CloudflareInterceptor extends BaseWebviewInterceptor {
+  static const String cfClearance = "cf_clearance";
 
-  CloudflareInterceptor(this.dio);
-
-  @override
-  void onRequest(RequestOptions options, RequestInterceptorHandler handler) {
-    if (cookies.isNotEmpty) {
-      options.headers[HttpHeaders.cookieHeader] = getCookies();
-    }
-    handler.next(options);
-  }
-
-  String getCookies() {
-    return cookies.entries.map((e) => "${e.key}=${e.value}").join("; ");
-  }
-
-  @override
-  void onResponse(
-    Response<dynamic> response,
-    ResponseInterceptorHandler handler,
-  ) async {
-    if (_isChallenge(response)) {
-      _passChallenge(response.requestOptions.uri.toString());
-      handler.reject(
-        CloudflareException(
-          requestOptions: response.requestOptions,
-          cloudflareType: .challenge,
-        ),
+  CloudflareInterceptor(Dio dio, [Set<String>? cookieNames])
+    : super(
+        dio,
+        cookieNames == null ? {cfClearance} : {...cookieNames, cfClearance},
       );
-      return;
-    }
-    handler.next(response);
-  }
 
-  bool _isChallenge(Response<dynamic> response) {
+  bool isChallenge(Response<dynamic> response) {
     return response.statusCode == 403 &&
         response.headers.value("cf-mitigated") == "challenge";
   }
 
-  Future<void> _passChallenge(String url) async {
-    if (App.isDesktop) {
-      _passChallengeDesktop(url);
-    } else if (App.isMobile) {
-      _passChallengeMobile(url);
+  bool isReteLimit(Response<dynamic> response) {
+    return false;
+  }
+
+  @override
+  bool shouldOpenWebview(Response<dynamic> response) {
+    return isChallenge(response);
+  }
+
+  @override
+  String getWebviewTitle(Response<dynamic> response) {
+    return "请完成Cloudflare验证";
+  }
+
+  @override
+  bool isResolved(String html, Map<String, String> cookies) {
+    return super.isResolved(html, cookies) &&
+        html.isNotEmpty &&
+        !html.contains("ray-id") &&
+        !html.contains("rayId") &&
+        !html.contains("Ray Id");
+  }
+
+  @override
+  DioException getClosedException(response) {
+    if (isReteLimit(response)) {
+      return CloudflareException(
+        requestOptions: response.requestOptions,
+        cloudflareType: CloudflareExceptionType.rateLimit,
+      );
     }
-  }
-
-  void _passChallengeDesktop(String url) async {
-    WebviewWindow.closeAll();
-    await Future.delayed(Duration(milliseconds: 200));
-    var webview = await WebviewWindow.create(
-      configuration: CreateConfiguration(
-        title: "Cloudflare验证",
-        titleBarHeight: 0,
-      ),
+    return CloudflareException(
+      requestOptions: response.requestOptions,
+      cloudflareType: CloudflareExceptionType.challenge,
     );
-    webview.setUserAgent(dio.options.headers[HttpHeaders.userAgentHeader]);
-    webview.setOnHistoryChangedCallback((canGoBack, canGoForward) async {
-      var html = await webview.getHtml();
-      if (html.isNotEmpty &&
-          !html.contains("ray-id") &&
-          !html.contains("rayId") &&
-          !html.contains("Ray Id")) {
-        var cookies = await webview.getAllCookies();
-        var clearance = cookies
-            .where(
-              (cookie) => cookie.name.contains("cf_clearance"),
-            )
-            .firstOrNull;
-        if (clearance == null) {
-          return;
-        }
-        debugPrint("cloudflare pass!");
-        String name = clearance.name.trim().replaceFirst('\u0000', '');
-        var value = clearance.value.trim().replaceFirst('\u0000', '');
-        this.cookies[name] = value;
-        webview.close();
-      }
-    });
-    webview.openDevToolsWindow();
-    webview.launch(url);
   }
-
-  void _passChallengeMobile(String url) async {}
 }
 
 class CloudflareException extends DioException with ExceptionWidgetMixin {
