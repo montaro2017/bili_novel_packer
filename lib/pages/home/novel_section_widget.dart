@@ -34,7 +34,11 @@ class _NovelSectionWidgetState extends State<NovelSectionWidget>
             padding: EdgeInsetsGeometry.symmetric(vertical: 8, horizontal: 16),
             child: Text(
               widget.section.name!,
-              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w900),
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w900,
+                overflow: TextOverflow.ellipsis,
+              ),
             ),
           ),
         NovelCardGridView(

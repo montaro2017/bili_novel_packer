@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:bili_novel_packer/exception.dart';
+import 'package:bili_novel_packer/extension/string_extension.dart';
 import 'package:bili_novel_packer/novel_source/base/cloudflare_interceptor.dart';
 import 'package:bili_novel_packer/novel_source/base/novel_model.dart';
 import 'package:bili_novel_packer/novel_source/base/novel_source.dart';
@@ -67,7 +68,39 @@ class WenkuNovelSource implements NovelSource {
     var html = (await dio.get(
       "https://www.wenku8.net/index.php",
     )).data.toString();
-    throw NotRetryableException("轻小说文库仅支持直接搜索链接");
+    var doc = parse(html);
+    var blocks = doc.querySelectorAll("#centers .block");
+    List<NovelSection> sections = [];
+
+    Novel parseNovel(Element el) {
+      var firstLink = el.querySelector("a")!;
+      var href = firstLink.attributes["href"]!;
+      var id = href.subBetween("/book/", ".htm")!;
+      var title = firstLink.attributes["title"]!;
+      var coverUrl = firstLink.querySelector("img")!.attributes["src"]!;
+      var novel = Novel();
+      novel.id = id;
+      novel.title = title;
+      novel.coverUrl = coverUrl;
+      return novel;
+    }
+
+    for (var block in blocks) {
+      var title = block.querySelector(".blocktitle")!.text;
+      var books = block.querySelectorAll(".blockcontent > div > div");
+      if (books.isEmpty) {
+        continue;
+      }
+      var novels = books.map((book) => parseNovel(book)).toList();
+      if (novels.isEmpty) {
+        continue;
+      }
+      var section = NovelSection();
+      section.name = title;
+      section.novels = novels;
+      sections.add(section);
+    }
+    return sections;
   }
 
   @override
@@ -219,12 +252,10 @@ class WenkuNovelSource implements NovelSource {
 
   @override
   Future<Uint8List> loadImage(String src) async {
-    return _scheduler.run((_) async {
-      var resp = await dio.get(
-        src,
-        options: Options(responseType: ResponseType.bytes),
-      );
-      return resp.data as Uint8List;
-    });
+    var resp = await dio.get(
+      src,
+      options: Options(responseType: ResponseType.bytes),
+    );
+    return resp.data as Uint8List;
   }
 }

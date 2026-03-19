@@ -407,8 +407,12 @@ class _CatalogDetailState extends State<_CatalogDetail> {
                       },
                     ),
                     SizedBox(width: 4),
-                    Text(volume.name),
-                    Spacer(),
+                    Expanded(
+                      child: Text(
+                        volume.name,
+                        style: TextStyle(overflow: TextOverflow.ellipsis),
+                      ),
+                    ),
                     GestureDetector(
                       onTap: state.toggle,
                       child: RotationTransition(
