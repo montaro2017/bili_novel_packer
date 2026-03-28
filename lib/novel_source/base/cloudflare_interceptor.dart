@@ -33,11 +33,12 @@ class CloudflareInterceptor extends BaseWebviewInterceptor {
 
   @override
   bool isResolved(String html, Map<String, String> cookies) {
-    return super.isResolved(html, cookies) &&
+    var resolved =
+        super.isResolved(html, cookies) &&
         html.isNotEmpty &&
-        !html.contains("ray-id") &&
-        !html.contains("rayId") &&
-        !html.contains("Ray Id");
+        html.length > 100 &&
+        !html.contains("window._cf_chl_opt");
+    return resolved;
   }
 
   @override
@@ -75,14 +76,14 @@ class CloudflareException extends DioException with ExceptionWidgetMixin {
   Widget _buildChallenge(ExceptionWidget widget) {
     return ExceptionWidgetMixin.defaultWidget(
       "请在打开的页面中进行Cloudflare验证，完成后点击重试按钮",
-      widget,
+      widget.retry,
     );
   }
 
   Widget _buildRateLimit(ExceptionWidget widget) {
     return ExceptionWidgetMixin.defaultWidget(
       "请求过于频繁，请稍后再试",
-      widget,
+      widget.retry,
     );
   }
 }

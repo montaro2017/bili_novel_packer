@@ -12,7 +12,6 @@ abstract class BaseWebviewInterceptor extends QueuedInterceptor {
 
   BaseWebviewInterceptor(Dio dio, this.cookieNames) {
     _dio = dio.clone();
-    _dio.interceptors.clear();
   }
 
   String get cookies {
@@ -78,26 +77,36 @@ abstract class BaseWebviewInterceptor extends QueuedInterceptor {
   ) async {
     debugPrint("open webview url: $url");
     WebviewWindow.closeAll();
-    await Future.delayed(Duration(milliseconds: 200));
+    await Future.delayed(Duration(milliseconds: 500));
+    await WebviewWindow.clearAll();
     var webview = await WebviewWindow.create(
       configuration: CreateConfiguration(
         title: title,
-        titleBarHeight: 0,
       ),
     );
     var options = response.requestOptions;
     webview.setUserAgent(_dio.options.headers[HttpHeaders.userAgentHeader]);
     webview.setOnHistoryChangedCallback((canGoBack, canGoForward) async {
+      String? currentUrl = await webview.evaluateJavaScript("location.href");
+      debugPrint("url: $currentUrl");
       _tryResolve(webview, url, options, handler);
     });
     webview.setBeforeCloseCallback(() async {
-      await _tryResolve(
-        webview,
-        url,
-        options,
-        handler,
-        getClosedException(response),
-      );
+      try {
+        await _tryResolve(
+          webview,
+          url,
+          options,
+          handler,
+          getClosedException(response),
+        );
+      } catch (e) {
+        if (!handler.isCompleted) {
+          handler.reject(
+            DioException(requestOptions: options, message: e.toString()),
+          );
+        }
+      }
       return true;
     });
     webview.launch(url);
@@ -126,6 +135,7 @@ abstract class BaseWebviewInterceptor extends QueuedInterceptor {
       return;
     }
     var html = await webview.getHtml();
+    debugPrint(html);
     var neededCookies = await _getCookieFromWebview(webview);
     if (!isResolved(html, neededCookies)) {
       if (e != null) {
@@ -137,6 +147,9 @@ abstract class BaseWebviewInterceptor extends QueuedInterceptor {
     var retryOptions = options.copyWith(path: url);
     retryOptions.headers[HttpHeaders.cookieHeader] = cookies;
     var response = await _dio.fetch(retryOptions);
+    if (handler.isCompleted) {
+      return;
+    }
     handler.resolve(response);
     webview.close();
   }
@@ -154,7 +167,10 @@ abstract class BaseWebviewInterceptor extends QueuedInterceptor {
     ResponseInterceptorHandler handler,
   ) {
     handler.reject(
-      DioException(requestOptions: response.requestOptions, message: "mobile is not support"),
+      DioException(
+        requestOptions: response.requestOptions,
+        message: "mobile is not support",
+      ),
     );
   }
 }

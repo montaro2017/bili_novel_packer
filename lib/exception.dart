@@ -10,8 +10,8 @@ class NotRetryableException implements Exception, ExceptionWidgetMixin {
   Widget buildExceptionWidget(BuildContext context, ExceptionWidget widget) {
     return ExceptionWidgetMixin.defaultWidget(
       message.toString(),
-      widget,
-      retry: false,
+      widget.retry,
+      retryable: false,
     );
   }
 }

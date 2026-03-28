@@ -50,7 +50,7 @@ class WenkuLoginException extends DioException with ExceptionWidgetMixin {
   Widget buildExceptionWidget(BuildContext context, ExceptionWidget widget) {
     return ExceptionWidgetMixin.defaultWidget(
       "账号未登录",
-      widget,
+      widget.retry,
     );
   }
 }

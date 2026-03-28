@@ -1,8 +1,11 @@
+import 'package:bili_novel_packer/exception.dart';
 import 'package:flutter/material.dart';
+
+typedef RetryFunction = Function();
 
 class ExceptionWidget extends StatelessWidget {
   final dynamic e;
-  final void Function()? retry;
+  final RetryFunction? retry;
 
   const ExceptionWidget({
     super.key,
@@ -19,12 +22,15 @@ class ExceptionWidget extends StatelessWidget {
   }
 
   Widget _fallback() {
-    return Padding(
-      padding: EdgeInsets.all(16),
-      child: Center(
-        child: Text(e.toString()),
-      ),
-    );
+    if (e is NotRetryableException) {
+      return Padding(
+        padding: EdgeInsets.all(16),
+        child: Center(
+          child: Text(e.toString()),
+        ),
+      );
+    }
+    return ExceptionWidgetMixin.defaultWidget(e.toString(), retry);
   }
 }
 
@@ -33,8 +39,8 @@ mixin ExceptionWidgetMixin on Exception {
 
   static Widget defaultWidget(
     String message,
-    ExceptionWidget widget, {
-    bool retry = true,
+    RetryFunction? retry, {
+    bool retryable = true,
   }) {
     return Padding(
       padding: EdgeInsets.all(16),
@@ -47,12 +53,12 @@ mixin ExceptionWidgetMixin on Exception {
               message,
               textAlign: TextAlign.center,
             ),
-            if (retry && widget.retry != null)
+            if (retryable && retry != null)
               Padding(
                 padding: EdgeInsets.only(top: 16),
                 child: FilledButton(
                   onPressed: () {
-                    widget.retry!.call();
+                    retry.call();
                   },
                   child: Text("重试"),
                 ),

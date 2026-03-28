@@ -40,7 +40,7 @@ class _MyAppState extends State<MyApp> {
         colorScheme: .fromSeed(seedColor: Colors.deepPurple),
         fontFamily: "MiSans",
         fontFamilyFallback: [
-          'MiSans',
+          // 'MiSans',
           'Helvetica Neue',
           'PingFang SC',
           'Source Han Sans SC',

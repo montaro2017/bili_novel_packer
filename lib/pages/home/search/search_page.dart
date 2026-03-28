@@ -1,5 +1,10 @@
 import 'package:bili_novel_packer/foundation/app.dart';
-import 'package:bili_novel_packer/pages/home/search/search_result_page.dart';
+import 'package:bili_novel_packer/novel_source/base/novel_model.dart';
+import 'package:bili_novel_packer/novel_source/base/novel_source.dart';
+import 'package:bili_novel_packer/widget/exception_widget.dart';
+import 'package:bili_novel_packer/widget/novel_card_grid.dart';
+import 'package:bili_novel_packer/widget/placeholder_widget.dart';
+import 'package:bili_novel_packer/widget/split_view.dart';
 import 'package:flutter/material.dart';
 
 class SearchPage extends StatefulWidget {
@@ -13,82 +18,122 @@ class SearchPage extends StatefulWidget {
 
 class _SearchPageState extends State<SearchPage>
     with AutomaticKeepAliveClientMixin {
-  final GlobalKey<_SearchViewState> _searchViewKey = GlobalKey();
+  late final TextEditingController _textController;
+  late final SplitViewController _viewController;
+
+  NovelSource? _source;
+  String? _keyword;
+  int _searchId = 0;
+
+  bool _showResult = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _textController = TextEditingController();
+    _viewController = SplitViewController();
+  }
+
+  @override
+  void dispose() {
+    super.dispose();
+    _textController.dispose();
+    _viewController.dispose();
+  }
+
+  void _onSearch(NovelSource source, String keyword) {
+    setState(() {
+      _source = source;
+      _keyword = keyword;
+      _searchId++;
+      _showResult = true;
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
     super.build(context);
     var breakPoint = App.breakPoint(context);
-    var useSplitView = breakPoint > BreakPoint.sm;
-    Widget searchView = _SearchView(key: _searchViewKey);
-    searchView = useSplitView
-        ? SizedBox(width: 375, child: searchView)
-        : Expanded(child: searchView);
-    return Scaffold(
-      body: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          searchView,
-          if (useSplitView) VerticalDivider(width: 1),
-          if (useSplitView) SearchResultPage(),
-        ],
+    SplitViewLayout layout = breakPoint >= .sm ? .all : .left;
+    return SplitView(
+      layout: layout,
+      controller: _viewController,
+      leftConstraints: const BoxConstraints(maxWidth: 350),
+      leftBuilder: (context, _) => _SearchInputView(
+        controller: _textController,
+        onSearchCallback: _onSearch,
       ),
+      rightBuilder: _buildSearchResult,
     );
+  }
+
+  Widget _buildSearchResult(BuildContext ctx, SplitViewLayout layout) {
+    if (_showResult) {
+      return _SearchResultView(
+        _source!,
+        _keyword!,
+        _searchId,
+        layout != .all,
+        onClose: () => {
+          setState(() {
+            _showResult = false;
+          }),
+        },
+      );
+    }
+    return PlaceholderWidget();
   }
 
   @override
   bool get wantKeepAlive => true;
 }
 
-class _SearchView extends StatefulWidget {
-  const _SearchView({super.key});
+typedef OnSearchCallback = void Function(NovelSource source, String keyword);
+
+class _SearchInputView extends StatefulWidget {
+  final TextEditingController controller;
+  final OnSearchCallback? onSearchCallback;
+
+  const _SearchInputView({
+    required this.controller,
+    this.onSearchCallback,
+  });
 
   @override
-  State<StatefulWidget> createState() {
-    return _SearchViewState();
-  }
+  State<StatefulWidget> createState() => _SearchInputViewState();
 }
 
-class _SearchViewState extends State<_SearchView>
-    with AutomaticKeepAliveClientMixin {
-  late final TextEditingController _controller;
-
-  @override
-  void initState() {
-    super.initState();
-    _controller = TextEditingController();
-    _controller.addListener(() {
-      if (mounted) {
-        setState(() {});
-      }
-    });
-  }
-
-  @override
-  void dispose() {
-    super.dispose();
-    _controller.dispose();
-  }
+class _SearchInputViewState extends State<_SearchInputView> {
+  TextEditingController get controller => widget.controller;
 
   @override
   Widget build(BuildContext context) {
-    super.build(context);
     var colorScheme = Theme.of(context).colorScheme;
     var textTheme = Theme.of(context).textTheme;
     return Scaffold(
       appBar: AppBar(
         title: SearchBar(
-          controller: _controller,
-          constraints: BoxConstraints(maxHeight: 56),
+          controller: controller,
+          constraints: const BoxConstraints(maxHeight: 56),
+          onSubmitted: (_) {
+            _emitCallback();
+          },
           trailing: [
-            if (_controller.text.isNotEmpty)
-              IconButton(
-                onPressed: () {
-                  _controller.clear();
-                },
-                icon: Icon(Icons.clear),
-              ),
-            IconButton(onPressed: () {}, icon: Icon(Icons.search)),
+            ListenableBuilder(
+              listenable: controller,
+              builder: (context, _) => controller.text.isNotEmpty
+                  ? IconButton(
+                      key: const ValueKey('clear_button'),
+                      onPressed: () => controller.clear(),
+                      icon: const Icon(Icons.clear),
+                    )
+                  : const SizedBox.shrink(),
+            ),
+            IconButton(
+              key: const ValueKey('search_button'),
+              onPressed: _emitCallback,
+              icon: const Icon(Icons.search),
+            ),
           ],
           hintText: "关键字 / 链接 / ID",
           textStyle: WidgetStateProperty.all(
@@ -109,6 +154,104 @@ class _SearchViewState extends State<_SearchView>
     );
   }
 
+  void _emitCallback() {
+    if (controller.text.isNotEmpty) {
+      widget.onSearchCallback?.call(NovelSource.sources[0], controller.text);
+    }
+  }
+}
+
+class _SearchResultView extends StatefulWidget {
+  final NovelSource source;
+  final String keyword;
+  final int searchId;
+  final bool showBack;
+  final Function()? onClose;
+
+  const _SearchResultView(
+    this.source,
+    this.keyword,
+    this.searchId,
+    this.showBack, {
+    this.onClose,
+  });
+
   @override
-  bool get wantKeepAlive => true;
+  State<StatefulWidget> createState() => _SearchResultViewState();
+}
+
+class _SearchResultViewState extends State<_SearchResultView> {
+  SearchIterator<Novel>? _iterator;
+  List<Novel> _novels = [];
+  bool _loading = false;
+  dynamic _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _search();
+  }
+
+  @override
+  void didUpdateWidget(covariant _SearchResultView oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.searchId != widget.searchId) {
+      _search();
+    }
+  }
+
+  void _search() async {
+    setState(() {
+      _loading = true;
+    });
+    try {
+      _iterator = widget.source!.search(widget.keyword!);
+      _novels = await _iterator!.next();
+      _error = null;
+    } catch (e) {
+      _error = e;
+    } finally {
+      setState(() {
+        _loading = false;
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    var child = _buildChild();
+    return Scaffold(
+      appBar: AppBar(
+        leading: widget.showBack
+            ? BackButton()
+            : IconButton(
+                onPressed: widget.onClose,
+                icon: Icon(Icons.close),
+              ),
+        title: Text("搜索结果"),
+      ),
+      body: child,
+    );
+  }
+
+  Widget _buildChild() {
+    if (_loading) {
+      return _buildLoadingWidget();
+    }
+    if (_error != null) {
+      return _buildErrorWidget();
+    }
+    return NovelCardGridView(source: widget.source, novels: _novels);
+  }
+
+  Widget _buildLoadingWidget() {
+    return Center(child: CircularProgressIndicator());
+  }
+
+  Widget _buildErrorWidget() {
+    return ExceptionWidget(
+      e: _error,
+      retry: _search,
+    );
+  }
 }
