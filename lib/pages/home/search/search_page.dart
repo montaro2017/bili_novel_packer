@@ -20,6 +20,9 @@ class _SearchPageState extends State<SearchPage>
     with AutomaticKeepAliveClientMixin {
   late final TextEditingController _textController;
   late final SplitViewController _viewController;
+  final GlobalKey<_SearchResultViewState> _resultKey = GlobalKey();
+
+  bool _defaultRightView = true;
 
   NovelSource? _source;
   String? _keyword;
@@ -47,6 +50,9 @@ class _SearchPageState extends State<SearchPage>
       _keyword = keyword;
       _searchId++;
       _showResult = true;
+      if (_viewController.layout == .left) {
+        _viewController.switchToRight();
+      }
     });
   }
 
@@ -54,7 +60,9 @@ class _SearchPageState extends State<SearchPage>
   Widget build(BuildContext context) {
     super.build(context);
     var breakPoint = App.breakPoint(context);
-    SplitViewLayout layout = breakPoint >= .sm ? .all : .left;
+    SplitViewLayout layout = breakPoint >= .sm
+        ? .all
+        : (_defaultRightView ? .left : .right);
     return SplitView(
       layout: layout,
       controller: _viewController,
@@ -67,14 +75,16 @@ class _SearchPageState extends State<SearchPage>
     );
   }
 
-  Widget _buildSearchResult(BuildContext ctx, SplitViewLayout layout) {
+  Widget _buildSearchResult(BuildContext ctx, bool showAll) {
     Widget child;
     if (_showResult) {
+      _defaultRightView = false;
       child = _SearchResultView(
-        _source!,
-        _keyword!,
-        _searchId,
-        layout != .all,
+        key: _resultKey,
+        source: _source!,
+        keyword: _keyword!,
+        searchId: _searchId,
+        showBack: !showAll,
         onClose: () => {
           setState(() {
             _showResult = false;
@@ -82,6 +92,7 @@ class _SearchPageState extends State<SearchPage>
         },
       );
     } else {
+      _defaultRightView = true;
       child = PlaceholderWidget();
     }
     return Container(
@@ -110,6 +121,8 @@ class _SearchInputView extends StatefulWidget {
 }
 
 class _SearchInputViewState extends State<_SearchInputView> {
+  NovelSource? _source = null;
+
   TextEditingController get controller => widget.controller;
 
   @override
@@ -156,14 +169,56 @@ class _SearchInputViewState extends State<_SearchInputView> {
           elevation: WidgetStateProperty.all(0),
         ),
       ),
-      body: Container(),
+      body: _buildBody(),
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
     );
   }
 
+  Widget _buildBody() {
+    return Column(
+      crossAxisAlignment: .start,
+      children: [
+        Divider(height: 1),
+        Padding(
+          padding: EdgeInsets.all(8),
+          child: Column(
+            spacing: 8,
+            crossAxisAlignment: .start,
+            children: [
+              Text(
+                "源",
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
+              ),
+              _sourceChips(),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _sourceChips() {
+    return Wrap(
+      spacing: 8,
+      children: NovelSource.sources.map((source) {
+        return ChoiceChip(
+          selected: _source == source,
+          label: Text(source.name),
+          onSelected: (bool value) {
+            if (value) {
+              setState(() {
+                _source = source;
+              });
+            }
+          },
+        );
+      }).toList(),
+    );
+  }
+
   void _emitCallback() {
-    if (controller.text.isNotEmpty) {
-      widget.onSearchCallback?.call(NovelSource.sources[0], controller.text);
+    if (controller.text.isNotEmpty && _source != null) {
+      widget.onSearchCallback?.call(_source!, controller.text);
     }
   }
 }
@@ -175,11 +230,12 @@ class _SearchResultView extends StatefulWidget {
   final bool showBack;
   final Function()? onClose;
 
-  const _SearchResultView(
-    this.source,
-    this.keyword,
-    this.searchId,
-    this.showBack, {
+  const _SearchResultView({
+    super.key,
+    required this.source,
+    required this.keyword,
+    required this.searchId,
+    required this.showBack,
     this.onClose,
   });
 

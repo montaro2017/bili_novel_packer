@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 
 typedef SplitPanelBuilder =
-    Widget Function(BuildContext ctx, SplitViewLayout status);
+    Widget Function(BuildContext ctx, SplitViewLayout layout);
+
+typedef SplitRightPanelBuilder = Widget Function(BuildContext ctx, bool isAll);
 
 enum SplitViewLayout { all, left, right }
 
@@ -12,7 +14,7 @@ class SplitView extends StatefulWidget {
   final SplitPanelBuilder leftBuilder;
 
   /// 右侧组件B
-  final SplitPanelBuilder rightBuilder;
+  final SplitRightPanelBuilder rightBuilder;
 
   final SplitViewLayout layout;
 
@@ -107,7 +109,7 @@ class _SplitViewState extends State<SplitView> {
   }
 
   Widget _rightPanel() {
-    var rightPanel = widget.rightBuilder(context, _layout);
+    var rightPanel = widget.rightBuilder(context, _layout == .all);
     if (_layout == .all) {
       rightPanel = Expanded(child: rightPanel);
     }
@@ -144,7 +146,11 @@ class _SplitViewState extends State<SplitView> {
     });
   }
 
-  void _backToLeft() {}
+  void _backToLeft() {
+    setState(() {
+      _layout = .left;
+    });
+  }
 }
 
 class SplitViewController extends ChangeNotifier {
