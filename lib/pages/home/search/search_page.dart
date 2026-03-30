@@ -68,8 +68,9 @@ class _SearchPageState extends State<SearchPage>
   }
 
   Widget _buildSearchResult(BuildContext ctx, SplitViewLayout layout) {
+    Widget child;
     if (_showResult) {
-      return _SearchResultView(
+      child = _SearchResultView(
         _source!,
         _keyword!,
         _searchId,
@@ -80,8 +81,13 @@ class _SearchPageState extends State<SearchPage>
           }),
         },
       );
+    } else {
+      child = PlaceholderWidget();
     }
-    return PlaceholderWidget();
+    return Container(
+      color: Theme.of(context).scaffoldBackgroundColor,
+      child: child,
+    );
   }
 
   @override
@@ -151,6 +157,7 @@ class _SearchInputViewState extends State<_SearchInputView> {
         ),
       ),
       body: Container(),
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
     );
   }
 
@@ -223,6 +230,7 @@ class _SearchResultViewState extends State<_SearchResultView> {
   Widget build(BuildContext context) {
     var child = _buildChild();
     return Scaffold(
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       appBar: AppBar(
         leading: widget.showBack
             ? BackButton()

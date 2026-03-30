@@ -127,9 +127,12 @@ class _NovelCardState extends State<NovelCard> {
           Icons.person_rounded,
           size: 13,
         ),
-        Text(
-          widget.novel.author!,
-          style: TextStyle(fontSize: 13),
+        Flexible(
+          child: Text(
+            widget.novel.author!,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(fontSize: 13),
+          ),
         ),
       ],
     );

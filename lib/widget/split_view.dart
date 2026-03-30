@@ -73,11 +73,7 @@ class _SplitViewState extends State<SplitView> {
         ],
       );
     } else {
-      var left = Positioned(child: leftPanel);
-      var right = Positioned(child: rightPanel);
-      child = Stack(
-        children: [left, right],
-      );
+      child = _buildStackLayout(leftPanel, rightPanel);
     }
 
     return PopScope(
@@ -116,6 +112,30 @@ class _SplitViewState extends State<SplitView> {
       rightPanel = Expanded(child: rightPanel);
     }
     return rightPanel;
+  }
+
+  Widget _buildStackLayout(Widget leftPanel, Widget rightPanel) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final screenWidth = constraints.maxWidth;
+        return Stack(
+          children: [
+            // Left panel - always fills the screen
+            Positioned.fill(child: leftPanel),
+            // Right panel - animated position based on layout
+            AnimatedPositioned(
+              duration: const Duration(milliseconds: 300),
+              curve: Curves.easeInOut,
+              left: _layout == .right ? 0 : screenWidth,
+              top: 0,
+              bottom: 0,
+              width: screenWidth,
+              child: rightPanel,
+            ),
+          ],
+        );
+      },
+    );
   }
 
   void _onChange() {
