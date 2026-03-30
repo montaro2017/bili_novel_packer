@@ -184,6 +184,7 @@ class _SearchResultViewState extends State<_SearchResultView> {
   SearchIterator<Novel>? _iterator;
   List<Novel> _novels = [];
   bool _loading = false;
+  bool _loadingMore = false;
   dynamic _error;
 
   @override
@@ -203,9 +204,10 @@ class _SearchResultViewState extends State<_SearchResultView> {
   void _search() async {
     setState(() {
       _loading = true;
+      _loadingMore = false;
     });
     try {
-      _iterator = widget.source!.search(widget.keyword!);
+      _iterator = widget.source.search(widget.keyword);
       _novels = await _iterator!.next();
       _error = null;
     } catch (e) {
@@ -241,17 +243,65 @@ class _SearchResultViewState extends State<_SearchResultView> {
     if (_error != null) {
       return _buildErrorWidget();
     }
-    return NovelCardGridView(source: widget.source, novels: _novels);
+    return NotificationListener<ScrollNotification>(
+      onNotification: _onScrollNotification,
+      child: SingleChildScrollView(
+        scrollDirection: Axis.vertical,
+        child: Column(
+          children: [
+            NovelCardGridView(source: widget.source, novels: _novels),
+            if (_loadingMore) _buildLoadMoreIndicator(),
+          ],
+        ),
+      ),
+    );
   }
 
   Widget _buildLoadingWidget() {
-    return Center(child: CircularProgressIndicator());
+    return Center(child: _buildLoadMoreIndicator());
   }
 
   Widget _buildErrorWidget() {
     return ExceptionWidget(
       e: _error,
       retry: _search,
+    );
+  }
+
+  bool _onScrollNotification(ScrollNotification scrollNotification) {
+    if (scrollNotification.metrics.extentAfter < 200 &&
+        !_loading &&
+        !_loadingMore &&
+        (_iterator?.hasNext ?? false)) {
+      _loadMore();
+    }
+    return false;
+  }
+
+  void _loadMore() async {
+    setState(() {
+      _loadingMore = true;
+    });
+    try {
+      var newNovels = await _iterator!.next();
+      setState(() {
+        _novels = [..._novels, ...newNovels];
+      });
+    } catch (e) {
+      setState(() {
+        _error = e;
+      });
+    } finally {
+      setState(() {
+        _loadingMore = false;
+      });
+    }
+  }
+
+  Widget _buildLoadMoreIndicator() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 16),
+      child: Center(child: CircularProgressIndicator()),
     );
   }
 }

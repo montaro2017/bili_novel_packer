@@ -18,7 +18,6 @@ class BiliNovelSource implements NovelSource {
   static final Map<String, String> secretMap = {};
   static final Scheduler _scheduler = Scheduler(15, Duration(minutes: 1));
   static final Scheduler _imageScheduler = Scheduler(10, Duration(seconds: 1));
-  static const String cookie = "night=1";
 
   static Lock lock = Lock();
   static bool warnFlag = false;
@@ -41,10 +40,10 @@ class BiliNovelSource implements NovelSource {
       "Accept": "*/*",
       "Accept-Language": " zh-CN,zh;q=0.9",
       "User-Agent": userAgent,
-      "Cookie": cookie,
       "Referer": "$domain/",
     };
     BaseOptions options = BaseOptions(
+      baseUrl: domain,
       headers: headers,
       responseType: ResponseType.plain,
       validateStatus: (status) {
@@ -56,7 +55,7 @@ class BiliNovelSource implements NovelSource {
     );
 
     var dio = Dio(options);
-    dio.interceptors.add(CloudflareInterceptor(dio));
+    dio.interceptors.add(CloudflareInterceptor(dio)..addCookie("night", "1"));
     return dio;
   }
 
@@ -67,7 +66,7 @@ class BiliNovelSource implements NovelSource {
 
   @override
   Future<List<NovelSection>> explore() async {
-    var resp = await dio.get(domain);
+    var resp = await dio.get('/');
     var html = resp.data.toString();
     return _parseIndex(html);
   }
@@ -128,7 +127,7 @@ class BiliNovelSource implements NovelSource {
   Future<Novel> loadNovel(String id) async {
     Novel novel = Novel();
 
-    String url = "$domain/novel/$id.html";
+    String url = "/novel/$id.html";
     String html = (await dio.get(url)).data.toString();
     var doc = parse(html);
     novel.id = id.toString();
@@ -162,7 +161,7 @@ class BiliNovelSource implements NovelSource {
   @override
   Future<Catalog> loadCatalog(Novel novel) async {
     String html = (await dio.get(
-      "$domain/novel/${novel.id}/catalog",
+      "/novel/${novel.id}/catalog",
     )).data.toString();
     var doc = parse(html);
     var catalog = Catalog();
@@ -697,8 +696,7 @@ class _BiliNovelSearchIterator implements SearchIterator<Novel> {
     if (!hasNext) {
       return Future.value([]);
     }
-    String url =
-        "${BiliNovelSource.domain}/search/${keyword}_${++pageNum}.html";
+    String url = "/search/${keyword}_${++pageNum}.html";
     var resp = await dio.get(url);
     var html = resp.data.toString();
     var doc = parse(html);

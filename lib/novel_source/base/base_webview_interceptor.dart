@@ -14,6 +14,10 @@ abstract class BaseWebviewInterceptor extends QueuedInterceptor {
     _dio = dio.clone();
   }
 
+  void addCookie(String name, String value) {
+    _cookies[name] = value;
+  }
+
   String get cookies {
     return _cookies.entries.map((e) => "${e.key}=${e.value}").join("; ");
   }
@@ -137,6 +141,7 @@ abstract class BaseWebviewInterceptor extends QueuedInterceptor {
     var html = await webview.getHtml();
     debugPrint(html);
     var neededCookies = await _getCookieFromWebview(webview);
+    _cookies.addAll(neededCookies);
     if (!isResolved(html, neededCookies)) {
       if (e != null) {
         handler.reject(e);

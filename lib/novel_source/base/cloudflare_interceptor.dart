@@ -33,12 +33,8 @@ class CloudflareInterceptor extends BaseWebviewInterceptor {
 
   @override
   bool isResolved(String html, Map<String, String> cookies) {
-    var resolved =
-        super.isResolved(html, cookies) &&
-        html.isNotEmpty &&
-        html.length > 100 &&
+    return super.isResolved(html, cookies) &&
         !html.contains("window._cf_chl_opt");
-    return resolved;
   }
 
   @override
