@@ -20,6 +20,7 @@ class _SearchPageState extends State<SearchPage>
     with AutomaticKeepAliveClientMixin {
   late final TextEditingController _textController;
   late final SplitViewController _viewController;
+  final GlobalKey<_SearchInputViewState> _inputKey = GlobalKey();
   final GlobalKey<_SearchResultViewState> _resultKey = GlobalKey();
 
   bool _defaultRightView = true;
@@ -68,6 +69,7 @@ class _SearchPageState extends State<SearchPage>
       controller: _viewController,
       leftConstraints: const BoxConstraints(maxWidth: 350),
       leftBuilder: (context, _) => _SearchInputView(
+        key: _inputKey,
         controller: _textController,
         onSearchCallback: _onSearch,
       ),
@@ -112,6 +114,7 @@ class _SearchInputView extends StatefulWidget {
   final OnSearchCallback? onSearchCallback;
 
   const _SearchInputView({
+    super.key,
     required this.controller,
     this.onSearchCallback,
   });
@@ -121,7 +124,7 @@ class _SearchInputView extends StatefulWidget {
 }
 
 class _SearchInputViewState extends State<_SearchInputView> {
-  NovelSource? _source = null;
+  NovelSource _source = NovelSource.sources[0];
 
   TextEditingController get controller => widget.controller;
 
@@ -178,16 +181,15 @@ class _SearchInputViewState extends State<_SearchInputView> {
     return Column(
       crossAxisAlignment: .start,
       children: [
-        Divider(height: 1),
         Padding(
-          padding: EdgeInsets.all(8),
+          padding: EdgeInsets.symmetric(vertical: 8, horizontal: 16),
           child: Column(
             spacing: 8,
             crossAxisAlignment: .start,
             children: [
               Text(
                 "源",
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
               ),
               _sourceChips(),
             ],
@@ -217,8 +219,8 @@ class _SearchInputViewState extends State<_SearchInputView> {
   }
 
   void _emitCallback() {
-    if (controller.text.isNotEmpty && _source != null) {
-      widget.onSearchCallback?.call(_source!, controller.text);
+    if (controller.text.isNotEmpty) {
+      widget.onSearchCallback?.call(_source, controller.text);
     }
   }
 }

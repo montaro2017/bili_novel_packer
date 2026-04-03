@@ -1,22 +1,22 @@
-import 'dart:math';
 import 'dart:typed_data';
 
 import 'package:bili_novel_packer/config/global_config.dart';
 import 'package:bili_novel_packer/novel_source/base/novel_model.dart';
 import 'package:bili_novel_packer/novel_source/base/novel_source.dart';
 import 'package:flutter/material.dart';
+import 'package:nil/nil.dart';
 
 class NovelCard extends StatefulWidget {
   final NovelSource source;
   final Novel novel;
+  final double coverWidth;
   final void Function()? onTap;
-  final double width;
 
   const NovelCard({
     super.key,
     required this.source,
+    required this.coverWidth,
     required this.novel,
-    required this.width,
     this.onTap,
   });
 
@@ -32,7 +32,6 @@ class _NovelCardState extends State<NovelCard> {
   @override
   void initState() {
     super.initState();
-
     if (widget.novel.coverUrl != null && GlobalConfig.loadImage) {
       widget.source.loadImage(widget.novel.coverUrl!).then((data) {
         setState(() {
@@ -44,19 +43,22 @@ class _NovelCardState extends State<NovelCard> {
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
-      width: widget.width,
-      child: InkWell(
-        onTap: widget.onTap,
-        child: Padding(
-          padding: EdgeInsets.symmetric(vertical: 8, horizontal: 16),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _novelCover(),
-              SizedBox(width: 8),
-              _novelInfo(),
-            ],
+    return ClipRRect(
+      borderRadius: BorderRadiusGeometry.circular(8),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: widget.onTap,
+          child: Padding(
+            padding: EdgeInsets.all(8),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _novelCover(),
+                SizedBox(width: 8),
+                _novelInfo(),
+              ],
+            ),
           ),
         ),
       ),
@@ -64,30 +66,23 @@ class _NovelCardState extends State<NovelCard> {
   }
 
   Widget _novelCover() {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        double maxWidth = 140;
-        var factor = 0.4;
-        double width = min(widget.width * factor, maxWidth);
-        return SizedBox(
-          width: width,
-          child: AspectRatio(
-            aspectRatio: 3 / 4,
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(4),
-              child: _imageData != null
-                  ? Image.memory(
-                      _imageData!,
-                      fit: BoxFit.cover,
-                    )
-                  : Container(
-                      color: Theme.of(context).colorScheme.primaryContainer,
-                      child: Center(child: Icon(Icons.info)),
-                    ),
-            ),
-          ),
-        );
-      },
+    return SizedBox(
+      width: widget.coverWidth,
+      child: AspectRatio(
+        aspectRatio: 3 / 4,
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(4),
+          child: _imageData != null
+              ? Image.memory(
+                  _imageData!,
+                  fit: BoxFit.cover,
+                )
+              : Container(
+                  color: Theme.of(context).colorScheme.primaryContainer,
+                  child: Center(child: Icon(Icons.info)),
+                ),
+        ),
+      ),
     );
   }
 
@@ -113,7 +108,7 @@ class _NovelCardState extends State<NovelCard> {
   Widget _title() {
     return Text(
       widget.novel.title,
-      maxLines: 3,
+      maxLines: 2,
       overflow: TextOverflow.ellipsis,
       style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800),
     );
@@ -160,11 +155,28 @@ class _NovelCardState extends State<NovelCard> {
   }
 
   Widget _desc() {
-    return Text(
-      widget.novel.description!,
-      maxLines: 3,
-      overflow: TextOverflow.ellipsis,
-      style: TextStyle(fontSize: 13),
+    return Flexible(
+      child: LayoutBuilder(
+        builder: (BuildContext context, BoxConstraints constraints) {
+          var fontSize = 13;
+          var lineHeight = 1.5;
+          var maxLines = (constraints.maxHeight / (fontSize * lineHeight))
+              .floor();
+          if (maxLines <= 0) {
+            return nil;
+          }
+          return Text(
+            _removeLineBreak(widget.novel.description!),
+            maxLines: maxLines,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(fontSize: 13, height: lineHeight),
+          );
+        },
+      ),
     );
+  }
+
+  String _removeLineBreak(String str) {
+    return str.replaceAll("[\r\n\t]", "");
   }
 }

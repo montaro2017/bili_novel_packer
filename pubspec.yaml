@@ -56,6 +56,7 @@ dependencies:
       path: packages/desktop_webview_window
       ref: main
   bot_toast: ^4.1.3
+  nil: ^1.1.1
 dev_dependencies:
   flutter_test:
     sdk: flutter

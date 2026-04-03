@@ -126,7 +126,7 @@ class _SplitViewState extends State<SplitView> {
             Positioned.fill(child: leftPanel),
             // Right panel - animated position based on layout
             AnimatedPositioned(
-              duration: const Duration(milliseconds: 300),
+              duration: const Duration(milliseconds: 250),
               curve: Curves.easeInOut,
               left: _layout == .right ? 0 : screenWidth,
               top: 0,
