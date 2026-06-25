@@ -171,8 +171,9 @@ class NovelPacker {
 
   Future<Uint8List> _getSingleImage(String src) async {
     try {
-      return lightNovelSource.getImage(src);
+      return await lightNovelSource.getImage(src);
     } catch (e) {
+      print("$src 图片下载失败: $e");
       return Uint8List(0);
     }
   }

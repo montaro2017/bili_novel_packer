@@ -1,25 +1,23 @@
+import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:bili_novel_packer/light_novel/base/light_novel_model.dart';
 import 'package:bili_novel_packer/light_novel/base/light_novel_source.dart';
+import 'package:bili_novel_packer/light_novel/base/logging_interceptor.dart';
+import 'package:bili_novel_packer/light_novel/base/rate_limit_interceptor.dart';
 import 'package:bili_novel_packer/light_novel/wenku_novel/wenku_novel.dart';
 import 'package:bili_novel_packer/log.dart';
 import 'package:bili_novel_packer/scheduler/scheduler.dart';
 import 'package:bili_novel_packer/util/html_util.dart';
-import 'package:bili_novel_packer/util/http_util.dart';
 import 'package:bili_novel_packer/util/url_util.dart';
-import 'package:fast_gbk/fast_gbk.dart';
+import 'package:dio/dio.dart';
+import 'package:gbk_codec/gbk_codec.dart';
 import 'package:html/dom.dart';
 import 'package:html/parser.dart';
 import 'package:retry/retry.dart';
 import 'package:synchronized/synchronized.dart';
 
 class WenkuNovelSource implements LightNovelSource {
-  @override
-  final String name = "轻小说文库";
-  @override
-  final String sourceUrl = "https://www.wenku8.net/login.php";
-
   static final RegExp _exp1 = RegExp("wenku8.net/book/(\\d+)");
   static final RegExp _exp2 = RegExp("wenku8.net/novel/\\d+/(\\d+)/");
   static final String domain = "https://www.wenku8.net";
@@ -31,15 +29,43 @@ class WenkuNovelSource implements LightNovelSource {
 
   static final Scheduler _scheduler = Scheduler(20, Duration(minutes: 1));
 
+  late final Dio _dio;
+
+  WenkuNovelSource() {
+    FutureOr<String?> gbkDecoder(responseBytes, options, responseBody) {
+      return gbk_bytes.decode(responseBytes);
+    }
+
+    var headers = {
+      "User-Agent": userAgent,
+    };
+    var options = BaseOptions(
+      baseUrl: domain,
+      headers: headers,
+      responseType: ResponseType.plain,
+      responseDecoder: gbkDecoder,
+      validateStatus: (status) {
+        if (status == null) return false;
+        return status >= 200 && status < 400;
+      },
+    );
+    _dio = Dio(options);
+    _dio.interceptors.add(RateLimitInterceptor(20, Duration(minutes: 1)));
+    _dio.interceptors.add(LoggingInterceptor());
+  }
+
+  @override
+  final String name = "轻小说文库";
+  @override
+  final String sourceUrl = "https://www.wenku8.net/login.php";
+
   @override
   Future<Novel> getNovel(String url) async {
     String id = _getId(url);
     WenkuNovel novel = WenkuNovel();
     url = "$domain/book/$id.htm";
     novel.url = url;
-    var html = await _httpGet(url, headers: {
-      "User-Agent": userAgent,
-    });
+    var html = (await _dio.get(url)).toString();
     var doc = parse(html);
     try {
       novel.id = id.toString();
@@ -48,8 +74,9 @@ class WenkuNovelSource implements LightNovelSource {
           .querySelector("table:nth-child(1)")!
           .querySelector("span b")!
           .text;
-      novel.coverUrl =
-          doc.querySelector("#content table img")!.attributes["src"]!;
+      novel.coverUrl = doc
+          .querySelector("#content table img")!
+          .attributes["src"]!;
       List<Element> details = doc
           .querySelector("#content table:nth-child(1)")!
           .querySelector("tr:nth-child(2)")!
@@ -57,17 +84,23 @@ class WenkuNovelSource implements LightNovelSource {
       novel.status = details[2].text.replaceFirst("文章状态：", "");
       novel.author = details[1].text.replaceFirst("小说作者：", "");
 
-      Element td =
-          doc.querySelectorAll("#content table")[2].querySelectorAll("td")[1];
+      Element td = doc
+          .querySelectorAll("#content table")[2]
+          .querySelectorAll("td")[1];
 
-      novel.tags =
-          td.querySelector("span")!.text.replaceFirst("作品Tags：", "").split(" ");
+      novel.tags = td
+          .querySelector("span")!
+          .text
+          .replaceFirst("作品Tags：", "")
+          .split(" ");
       novel.description = td.querySelectorAll("span").last.text;
 
-      novel.catalogUrl =
-          doc.querySelector("legend + div > a")!.attributes["href"]!;
+      novel.catalogUrl = doc
+          .querySelector("legend + div > a")!
+          .attributes["href"]!;
       if (!novel.catalogUrl.startsWith("http")) {
-        novel.catalogUrl = domain +
+        novel.catalogUrl =
+            domain +
             (novel.catalogUrl.startsWith("/") ? "" : "/") +
             novel.catalogUrl;
       }
@@ -83,14 +116,8 @@ class WenkuNovelSource implements LightNovelSource {
   Future<Catalog> getNovelCatalog(Novel novel) async {
     String url = (novel as WenkuNovel).catalogUrl;
     String prefix = URLUtil.resolve(url, "./");
-    var doc = parse(
-      await _httpGet(
-        url,
-        headers: {
-          "User-Agent": userAgent,
-        },
-      ),
-    );
+    var html = (await _dio.get(url)).toString();
+    var doc = parse(html);
     var tdList = doc.querySelectorAll("table td");
     var catalog = Catalog(novel);
     Volume? volume;
@@ -139,13 +166,9 @@ class WenkuNovelSource implements LightNovelSource {
   Future<Document> _getNovelChapter(Chapter chapter) async {
     String url = chapter.chapterUrl!;
     logger.i(
-        " ==> ${chapter.volume.volumeName} ${chapter.chapterName} ${chapter.chapterUrl}");
-    String html = await _httpGet(
-      url,
-      headers: {
-        "User-Agent": userAgent,
-      },
+      " ==> ${chapter.volume.volumeName} ${chapter.chapterName} ${chapter.chapterUrl}",
     );
+    var html = (await _dio.get(url)).toString();
     var doc = parse(html);
     var outerHtml = doc.outerHtml;
     if (outerHtml.contains("Cloudflare") && outerHtml.contains("Ray ID")) {
@@ -203,34 +226,39 @@ class WenkuNovelSource implements LightNovelSource {
 
   @override
   Future<Uint8List> getImage(String src) {
-    return _scheduler.run(
-      (c) => httpGetBytes(
-        src,
-        headers: {
-          "User-Agent": userAgent,
-        },
-      ),
-    );
+    return _dio
+        .get(src, options: Options(responseType: ResponseType.bytes))
+        .then((res) {
+          return res.data as Uint8List;
+        });
+    // return _scheduler.run(
+    //   (c) => httpGetBytes(
+    //     src,
+    //     headers: {
+    //       "User-Agent": userAgent,
+    //     },
+    //   ),
+    // );
   }
 
-  Future<String> _httpGet(
-    String url, {
-    Map<String, String>? headers,
-  }) {
-    return _scheduler.run((c) async {
-      String html = await httpGetString(
-        url,
-        headers: headers,
-        codec: gbk,
-      );
-      if (html.contains("rate limited")) {
-        logger.i("GET $url Reach rate limit");
-        c.pause();
-        await Future.delayed(Duration(seconds: 10));
-        c.resume();
-        return _httpGet(url, headers: headers);
-      }
-      return html;
-    });
-  }
+  // Future<String> _httpGet(
+  //   String url, {
+  //   Map<String, String>? headers,
+  // }) {
+  //   return _scheduler.run((c) async {
+  //     String html = await httpGetString(
+  //       url,
+  //       headers: headers,
+  //       codec: gbk,
+  //     );
+  //     if (html.contains("rate limited")) {
+  //       logger.i("GET $url Reach rate limit");
+  //       c.pause();
+  //       await Future.delayed(Duration(seconds: 10));
+  //       c.resume();
+  //       return _httpGet(url, headers: headers);
+  //     }
+  //     return html;
+  //   });
+  // }
 }

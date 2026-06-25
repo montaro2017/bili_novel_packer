@@ -1,7 +1,7 @@
 import 'dart:io';
 
 import 'package:bili_novel_packer/light_novel/base/light_novel_model.dart';
-import 'package:bili_novel_packer/log.dart';
+import 'package:bili_novel_packer/logger.dart';
 import 'package:bili_novel_packer/novel_packer.dart';
 import 'package:bili_novel_packer/pack_argument.dart';
 import 'package:console/console.dart';

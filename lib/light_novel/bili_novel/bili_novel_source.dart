@@ -4,18 +4,22 @@ import 'dart:typed_data';
 
 import 'package:bili_novel_packer/light_novel/base/light_novel_model.dart';
 import 'package:bili_novel_packer/light_novel/base/light_novel_source.dart';
-import 'package:bili_novel_packer/light_novel/bili_novel/bili_chapterlog.dart';
+import 'package:bili_novel_packer/light_novel/base/logging_interceptor.dart';
+import 'package:bili_novel_packer/light_novel/base/rate_limit_interceptor.dart';
+import 'package:bili_novel_packer/light_novel/base/redirect_interceptor.dart';
+import 'package:bili_novel_packer/light_novel/bili_novel/bili_novel_chapterlog.dart';
 import 'package:bili_novel_packer/light_novel/bili_novel/bili_novel_secret.dart';
 import 'package:bili_novel_packer/log.dart';
 import 'package:bili_novel_packer/scheduler/scheduler.dart';
 import 'package:bili_novel_packer/util/html_util.dart';
-import 'package:bili_novel_packer/util/http_util.dart';
+import 'package:dio/dio.dart';
 import 'package:html/dom.dart';
 import 'package:html/parser.dart';
 
 class BiliNovelSource implements LightNovelSource {
-  static final RegExp _exp =
-      RegExp("(?:linovelib|bilinovel)\\.com/(?:novel|download)/(\\d+)");
+  static final RegExp _exp = RegExp(
+    "(?:linovelib|bilinovel)\\.com/(?:novel|download)/(\\d+)",
+  );
   static final String domain = "https://m.bilinovel.com";
 
   static final Map<String, String> secretMap = {};
@@ -30,10 +34,43 @@ class BiliNovelSource implements LightNovelSource {
 
   late final BiliChapterLogResolver _chapterLogResolver =
       BiliChapterLogResolver(
-    domain: domain,
-    loadScript: _httpGetString,
-    logInfo: (message) => logger.i(message),
-  );
+        domain: domain,
+        loadScript: (src) {
+          return _dio.get(src).then((res) {
+            return res.data.toString();
+          });
+        },
+        logInfo: (message) => logger.i(message),
+      );
+
+  late final Dio _dio;
+  late final Dio _imageDio;
+
+  BiliNovelSource() {
+    var headers = {
+      "Accept": "*/*",
+      "Accept-Language": "zh-CN,zh;q=0.9",
+      "Cookie": "night=0",
+      "Referer": domain,
+      "User-Agent": userAgent,
+    };
+    var options = BaseOptions(
+      baseUrl: domain,
+      headers: headers,
+      responseType: ResponseType.plain,
+      validateStatus: (status) {
+        if (status == null) return false;
+        return status >= 200 && status < 400;
+      },
+    );
+    _dio = Dio(options);
+    _dio.interceptors.add(RateLimitInterceptor(15, Duration(minutes: 1)));
+    _dio.interceptors.add(RedirectInterceptor(_dio));
+    _dio.interceptors.add(LoggingInterceptor());
+
+    _imageDio = Dio(options.copyWith(responseType: ResponseType.bytes));
+    _imageDio.interceptors.add(RateLimitInterceptor(10, Duration(minutes: 1)));
+  }
 
   @override
   final String name = "哔哩轻小说";
@@ -50,13 +87,9 @@ class BiliNovelSource implements LightNovelSource {
   @override
   Future<Novel> getNovel(String url) async {
     String id = _getId(url);
+    String actualUrl = "$domain/novel/$id.html";
     Novel novel = Novel();
-    String html = await httpGetString(
-      "$domain/novel/$id.html",
-      headers: {
-        "Accept-Language": " zh-CN,zh;q=0.9",
-      },
-    );
+    String html = (await _dio.get(actualUrl)).toString();
     try {
       var doc = parse(html);
       novel.id = id.toString();
@@ -64,14 +97,16 @@ class BiliNovelSource implements LightNovelSource {
       novel.title = doc.querySelector(".book-title")!.text;
 
       // 解析别名信息
-      var backupNameElement =
-          doc.querySelector(".backupname .bkname-body.gray");
+      var backupNameElement = doc.querySelector(
+        ".backupname .bkname-body.gray",
+      );
       if (backupNameElement != null) {
         novel.alias = backupNameElement.text.trim();
       }
 
-      novel.coverUrl =
-          doc.querySelector(".book-layout img")!.attributes["src"]!;
+      novel.coverUrl = doc
+          .querySelector(".book-layout img")!
+          .attributes["src"]!;
       novel.tags = doc
           .querySelectorAll(".book-cell .book-meta span em")
           .map((e) => e.text)
@@ -104,12 +139,7 @@ class BiliNovelSource implements LightNovelSource {
   @override
   Future<Catalog> getNovelCatalog(Novel novel) async {
     String url = "$domain/novel/${novel.id}/catalog";
-    String html = await httpGetString(
-      url,
-      headers: {
-        "Accept-Language": " zh-CN,zh;q=0.9",
-      },
-    );
+    String html = (await _dio.get(url)).toString();
     var doc = parse(html);
     var catalog = Catalog(novel);
     _replaceImageSrc(doc.body!);
@@ -131,8 +161,10 @@ class BiliNovelSource implements LightNovelSource {
         }
         volume = Volume(li.text, catalog);
       } else if (li.classes.contains("volume-cover")) {
-        volume?.cover =
-            li.querySelector("a")?.querySelector("img")?.attributes["src"];
+        volume?.cover = li
+            .querySelector("a")
+            ?.querySelector("img")
+            ?.attributes["src"];
       } else if (li.classes.contains("jsChapter")) {
         var link = li.querySelector("a")!;
         String name = link.text;
@@ -164,7 +196,8 @@ class BiliNovelSource implements LightNovelSource {
       throw "Empty chapter url";
     }
     logger.i(
-        " ==> ${chapter.volume.volumeName} ${chapter.chapterName} ${chapter.chapterUrl}");
+      " ==> ${chapter.volume.volumeName} ${chapter.chapterName} ${chapter.chapterUrl}",
+    );
     String? nextPageUrl = chapter.chapterUrl!;
     do {
       ChapterPage page = await _getChapterPage(nextPageUrl!);
@@ -247,7 +280,7 @@ class BiliNovelSource implements LightNovelSource {
 
   /// 获取章节一页内容
   Future<ChapterPage> _getChapterPage(String url) async {
-    String html = await _httpGetString(url);
+    String html = (await _dio.get(url)).toString();
     var doc = parse(html);
 
     String? title;
@@ -255,8 +288,9 @@ class BiliNovelSource implements LightNovelSource {
       title = doc.querySelector("#atitle")?.text;
     }
     var selectors = ["#acontent", ".bcontent"];
-    var content =
-        selectors.map((selector) => doc.querySelector(selector)).firstOrNull;
+    var content = selectors
+        .map((selector) => doc.querySelector(selector))
+        .firstOrNull;
     if (content == null) {
       logger.i("GET $url ERROR");
       logger.i(html);
@@ -321,7 +355,7 @@ class BiliNovelSource implements LightNovelSource {
     return _chapterLogResolver.getShuffleParams(doc);
   }
 
-  _shuffle(Element content, Map<String, int> shuffleParams) {
+  void _shuffle(Element content, Map<String, int> shuffleParams) {
     var pElements = content
         .querySelectorAll("p")
         .where((p) => p.text.trim().isNotEmpty)
@@ -419,7 +453,7 @@ class BiliNovelSource implements LightNovelSource {
       "usemap",
       "width",
       "src",
-      "xml:lang"
+      "xml:lang",
     ];
     for (var attr in image.attributes.keys.toList()) {
       if (!attrs.contains(attr as String)) {
@@ -428,31 +462,12 @@ class BiliNovelSource implements LightNovelSource {
     }
   }
 
-  _addAlt(Element image, [String? alt]) {
+  void _addAlt(Element image, [String? alt]) {
     image.attributes["alt"] = alt ?? "";
   }
 
-  Future<String> _httpGetString(String url) {
-    return _scheduler.run((c) async {
-      String html = await httpGetString(url, headers: {
-        "User-Agent": userAgent,
-        "Accept": "*/*",
-        "Accept-Language": "zh-CN,zh;q=0.9",
-        "Cookie": cookie
-      });
-      if (html.contains("Cloudflare to restrict access") ||
-          html.contains("503 Service Temporarily Unavailable")) {
-        c.pause();
-        await Future.delayed(Duration(seconds: 10));
-        c.resume();
-        return _httpGetString(url);
-      }
-      return html;
-    });
-  }
-
   @override
-  Future<Uint8List> getImage(String src) async {
+  Future<Uint8List> getImage(String src) {
     if (src.startsWith("data:image")) {
       src = src.split(",")[1];
       return Future.value(base64.decode(src));
@@ -463,19 +478,7 @@ class BiliNovelSource implements LightNovelSource {
     src = src.replaceFirst("https://https://", "https://");
     // 处理图片url域名特殊字符 𝘣 = \ud835\ude23
     src = src.replaceAll("\ud835\ude23", "b");
-    return _imageScheduler.run((_) async {
-      return httpGetBytes(
-        src,
-        headers: {
-          "Referer": domain,
-          "User-Agent": userAgent,
-          "Cache-Control": "public",
-          "Accept": "*/*",
-          "Accept-Language": "zh-CN,zh;q=0.9",
-          "Cookie": cookie,
-        },
-      );
-    });
+    return _imageDio.get<Uint8List>(src).then((res) => res.data!);
   }
 }
 
