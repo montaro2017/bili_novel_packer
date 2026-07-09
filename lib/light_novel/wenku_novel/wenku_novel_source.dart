@@ -3,10 +3,10 @@ import 'dart:typed_data';
 
 import 'package:bili_novel_packer/light_novel/base/light_novel_model.dart';
 import 'package:bili_novel_packer/light_novel/base/light_novel_source.dart';
-import 'package:bili_novel_packer/light_novel/base/logging_interceptor.dart';
-import 'package:bili_novel_packer/light_novel/base/rate_limit_interceptor.dart';
+import 'package:bili_novel_packer/interceptor/logging_interceptor.dart';
+import 'package:bili_novel_packer/interceptor/rate_limit_interceptor.dart';
 import 'package:bili_novel_packer/light_novel/wenku_novel/wenku_novel.dart';
-import 'package:bili_novel_packer/log.dart';
+import 'package:bili_novel_packer/logger.dart';
 import 'package:bili_novel_packer/scheduler/scheduler.dart';
 import 'package:bili_novel_packer/util/html_util.dart';
 import 'package:bili_novel_packer/util/url_util.dart';

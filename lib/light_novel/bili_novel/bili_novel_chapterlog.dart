@@ -2,21 +2,17 @@ import 'package:html/dom.dart';
 import 'package:synchronized/synchronized.dart';
 
 typedef BiliChapterLogLoader = Future<String> Function(String url);
-typedef BiliChapterLogLogger = void Function(String message);
 
 class BiliChapterLogResolver {
   final String domain;
   final BiliChapterLogLoader loadScript;
-  final BiliChapterLogLogger? logInfo;
 
   final Lock _lock = Lock();
-  final Map<String, BiliChapterLogTemplate?> _templateCache = {};
-  final Set<String> _warnings = {};
+  final Map<String, BiliChapterLogTemplate> _templateCache = {};
 
   BiliChapterLogResolver({
     required this.domain,
     required this.loadScript,
-    this.logInfo,
   });
 
   Future<Map<String, int>?> getShuffleParams(Document doc) async {
@@ -37,44 +33,31 @@ class BiliChapterLogResolver {
 
     String jsSrc = script.attributes["src"]!;
     String scriptUrl = Uri.parse(domain).resolve(jsSrc).toString();
-    BiliChapterLogTemplate? template = await _getTemplate(scriptUrl);
-    template ??= BiliChapterLogTemplate.fallback();
+    BiliChapterLogTemplate template = await _getTemplate(scriptUrl);
     return template.toShuffleParams(chapterId);
   }
 
-  Future<BiliChapterLogTemplate?> _getTemplate(String scriptUrl) {
+  Future<BiliChapterLogTemplate> _getTemplate(String scriptUrl) {
     return _lock.synchronized(() async {
       if (_templateCache.containsKey(scriptUrl)) {
-        return _templateCache[scriptUrl];
+        return _templateCache[scriptUrl]!;
       }
 
+      String js;
       try {
-        String js = await loadScript(scriptUrl);
-        BiliChapterLogTemplate? template = BiliChapterLogTemplate.tryParse(js);
-        if (template == null) {
-          _warn(
-            scriptUrl,
-            "[warning] failed to parse chapterlog.js at runtime: $scriptUrl",
-          );
-        }
-        _templateCache[scriptUrl] = template;
-        return template;
+        js = await loadScript(scriptUrl);
       } catch (e) {
-        _warn(
-          scriptUrl,
-          "[warning] failed to load chapterlog.js at runtime: $scriptUrl",
-        );
-        logInfo?.call("chapterlog load error: $e");
-        _templateCache[scriptUrl] = null;
-        return null;
+        throw Exception("failed to load chapterlog.js: $scriptUrl, $e");
       }
-    });
-  }
 
-  void _warn(String key, String message) {
-    if (_warnings.add(key)) {
-      print(message);
-    }
+      BiliChapterLogTemplate? template = BiliChapterLogTemplate.tryParse(js);
+      if (template == null) {
+        throw Exception("failed to parse chapterlog.js: $scriptUrl");
+      }
+
+      _templateCache[scriptUrl] = template;
+      return template;
+    });
   }
 }
 
@@ -112,15 +95,16 @@ class BiliChapterLogTemplate {
     required this.mod,
   });
 
-  factory BiliChapterLogTemplate.fallback() {
-    return const BiliChapterLogTemplate(
-      fixedLength: _defaultFixedLength,
-      seedMultiplier: 135,
-      seedOffset: 234,
-      a: 9302,
-      c: 49397,
-      mod: 233280,
-    );
+  @override
+  String toString() {
+    return 'BiliChapterLogTemplate('
+        'fixedLength: $fixedLength, '
+        'seedMultiplier: $seedMultiplier, '
+        'seedOffset: $seedOffset, '
+        'a: $a, '
+        'c: $c, '
+        'mod: $mod'
+        ')';
   }
 
   Map<String, int> toShuffleParams(int chapterId) {
@@ -143,8 +127,11 @@ class BiliChapterLogTemplate {
   }
 
   static BiliChapterLogTemplate? _tryParsePlain(String js) {
-    String? fixedLengthExpression =
-        _extractTrailingExpression(js, _fixedLengthStartPattern, ')');
+    String? fixedLengthExpression = _extractTrailingExpression(
+      js,
+      _fixedLengthStartPattern,
+      ')',
+    );
     RegExpMatch? seedMatch = _seedExpressionPattern.firstMatch(js);
     RegExpMatch? lcgMatch = _lcgExpressionPattern.firstMatch(js);
     if (fixedLengthExpression == null ||
@@ -156,8 +143,9 @@ class BiliChapterLogTemplate {
     int? fixedLength = _evalIntExpression(
       _stripOuterParentheses(fixedLengthExpression),
     );
-    ({int multiplier, int offset})? seedParams =
-        _parseSeedExpression(seedMatch.group(1));
+    ({int multiplier, int offset})? seedParams = _parseSeedExpression(
+      seedMatch.group(1),
+    );
     ({int a, int c, int mod})? lcgParams = _parseLcgExpression(
       lcgMatch.group(1),
     );
@@ -176,8 +164,9 @@ class BiliChapterLogTemplate {
   }
 
   static BiliChapterLogTemplate? _tryParseObfuscated(String js) {
-    ({int multiplier, int offset})? seedParams =
-        _parseObfuscatedSeedExpression(js);
+    ({int multiplier, int offset})? seedParams = _parseObfuscatedSeedExpression(
+      js,
+    );
     ({int a, int c, int mod})? lcgParams = _parseObfuscatedLcgExpression(js);
     if (seedParams == null || lcgParams == null) {
       return null;

@@ -10,18 +10,18 @@ import 'package:bili_novel_packer/light_novel/base/light_novel_model.dart';
 import 'package:bili_novel_packer/light_novel/base/light_novel_source.dart';
 import 'package:bili_novel_packer/light_novel/bili_novel/bili_novel_source.dart';
 import 'package:bili_novel_packer/light_novel/wenku_novel/wenku_novel_source.dart';
-import 'package:bili_novel_packer/log.dart';
+import 'package:bili_novel_packer/logger.dart';
 import 'package:bili_novel_packer/pack_argument.dart';
-import 'package:bili_novel_packer/util/volume_util.dart';
 import 'package:bili_novel_packer/util/html_util.dart';
 import 'package:bili_novel_packer/util/sequence.dart';
+import 'package:bili_novel_packer/util/volume_util.dart';
 import 'package:console/console.dart';
 import 'package:html/dom.dart';
 
 class NovelPacker {
   static final List<LightNovelSource> sources = [
     BiliNovelSource(),
-    WenkuNovelSource()
+    WenkuNovelSource(),
   ];
 
   String url;
@@ -112,8 +112,9 @@ class NovelPacker {
       Console.write("正在处理: ${volume.volumeName}\n");
       NavPoint volumeNavPoint = NavPoint(volume.volumeName);
       List<Future<Document>> futures = volume.chapters
-          .map((chapter) =>
-              _resolveChapter(chapter, packer, arg.addChapterTitle))
+          .map(
+            (chapter) => _resolveChapter(chapter, packer, arg.addChapterTitle),
+          )
           .toList();
 
       List<Document> chapterDocuments = await Future.wait(futures);
@@ -156,9 +157,11 @@ class NovelPacker {
 
     // 添加章节标题
     if (addChapterTitle) {
-      doc.head!.append(Element.html(
-        '<link rel="stylesheet" type="text/css" href="styles/style.css">',
-      ));
+      doc.head!.append(
+        Element.html(
+          '<link rel="stylesheet" type="text/css" href="styles/style.css">',
+        ),
+      );
       var firstChild = doc.body!.firstChild;
       Node chapterTitle = Element.html(
         '<div class="chapter-title">${chapter.chapterName}</div>',
@@ -292,10 +295,11 @@ class NovelPacker {
   ) async {
     // 优先使用目录中的封面 否则自动检测
     if (volume.cover != null) {
-      Uint8List coverData =
-          await _getSingleImage(volume.cover!).catchError((e) {
-        throw "下载封面失败 ${volume.cover}\n$e";
-      });
+      Uint8List coverData = await _getSingleImage(volume.cover!);
+      if (coverData.isEmpty) {
+        print("封面下载失败");
+        return;
+      }
       String coverName =
           "images/${_imageSequence.next.toString().padLeft(6, '0')}.jpg";
       packer.addImage(name: "OEBPS/$coverName", data: coverData);
@@ -337,7 +341,7 @@ class NovelPacker {
   }
 
   // 添加title元素
-  _addTitle(Document document, String title) {
+  void _addTitle(Document document, String title) {
     var element = document.createElement("title");
     element.text = title;
     document.head?.append(element);

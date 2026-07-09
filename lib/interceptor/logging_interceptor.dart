@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:dio/dio.dart';
 
@@ -68,8 +69,13 @@ class LoggingInterceptor extends Interceptor {
     String status = statusMessage.isEmpty
         ? statusCode.toString()
         : "$statusCode $statusMessage";
-    _log("<-- $status ${options.uri} (${duration.inMilliseconds}ms)");
 
+    if (statusCode == 301 || statusCode == 302) {
+      var location = response.headers[HttpHeaders.locationHeader]?.firstOrNull;
+      _log("<-- $status ${options.uri} -> $location (${duration.inMilliseconds}ms)");
+    } else {
+      _log("<-- $status ${options.uri} (${duration.inMilliseconds}ms)");
+    }
     if (_logHeaders) {
       response.headers.forEach(
         (name, values) => _log("$name: ${values.join(", ")}"),

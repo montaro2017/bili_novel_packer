@@ -4,13 +4,12 @@ import 'dart:typed_data';
 
 import 'package:bili_novel_packer/light_novel/base/light_novel_model.dart';
 import 'package:bili_novel_packer/light_novel/base/light_novel_source.dart';
-import 'package:bili_novel_packer/light_novel/base/logging_interceptor.dart';
-import 'package:bili_novel_packer/light_novel/base/rate_limit_interceptor.dart';
-import 'package:bili_novel_packer/light_novel/base/redirect_interceptor.dart';
+import 'package:bili_novel_packer/interceptor/logging_interceptor.dart';
+import 'package:bili_novel_packer/interceptor/rate_limit_interceptor.dart';
+import 'package:bili_novel_packer/interceptor/redirect_interceptor.dart';
 import 'package:bili_novel_packer/light_novel/bili_novel/bili_novel_chapterlog.dart';
-import 'package:bili_novel_packer/light_novel/bili_novel/bili_novel_secret.dart';
-import 'package:bili_novel_packer/log.dart';
-import 'package:bili_novel_packer/scheduler/scheduler.dart';
+import 'package:bili_novel_packer/light_novel/bili_novel/bili_novel_restore.dart';
+import 'package:bili_novel_packer/logger.dart';
 import 'package:bili_novel_packer/util/html_util.dart';
 import 'package:dio/dio.dart';
 import 'package:html/dom.dart';
@@ -20,18 +19,13 @@ class BiliNovelSource implements LightNovelSource {
   static final RegExp _exp = RegExp(
     "(?:linovelib|bilinovel)\\.com/(?:novel|download)/(\\d+)",
   );
-  static final String domain = "https://m.bilinovel.com";
-
-  static final Map<String, String> secretMap = {};
+  static final String domain = "https://www.bilinovel.com";
 
   static final String userAgent =
       "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36";
 
-  static final String cookie = "night=0";
-
-  static final Scheduler _scheduler = Scheduler(15, Duration(minutes: 1));
-  static final Scheduler _imageScheduler = Scheduler(10, Duration(seconds: 1));
-
+  late final Dio _dio;
+  late final Dio _imageDio;
   late final BiliChapterLogResolver _chapterLogResolver =
       BiliChapterLogResolver(
         domain: domain,
@@ -40,11 +34,7 @@ class BiliNovelSource implements LightNovelSource {
             return res.data.toString();
           });
         },
-        logInfo: (message) => logger.i(message),
       );
-
-  late final Dio _dio;
-  late final Dio _imageDio;
 
   BiliNovelSource() {
     var headers = {
@@ -65,8 +55,8 @@ class BiliNovelSource implements LightNovelSource {
     );
     _dio = Dio(options);
     _dio.interceptors.add(RateLimitInterceptor(15, Duration(minutes: 1)));
-    _dio.interceptors.add(RedirectInterceptor(_dio));
     _dio.interceptors.add(LoggingInterceptor());
+    _dio.interceptors.add(RedirectInterceptor(_dio));
 
     _imageDio = Dio(options.copyWith(responseType: ResponseType.bytes));
     _imageDio.interceptors.add(RateLimitInterceptor(10, Duration(minutes: 1)));
@@ -76,12 +66,7 @@ class BiliNovelSource implements LightNovelSource {
   final String name = "哔哩轻小说";
 
   @override
-  final String sourceUrl = "https://m.bilinovel.com";
-
-  static Future<void> init() async {
-    BiliNovelSource.secretMap.clear();
-    BiliNovelSource.secretMap.addAll(await BiliNovelHelper.getSecretMap());
-  }
+  final String sourceUrl = "https://www.bilinovel.com";
 
   /// 获取小说基本信息
   @override
@@ -338,7 +323,7 @@ class BiliNovelSource implements LightNovelSource {
 
     Map<String, int>? params = await _getShuffleParams(doc);
     if (params != null) {
-      _shuffle(content, params);
+      BiliNovelRestore.restore(content, params);
     }
 
     return ChapterPage(
@@ -351,71 +336,11 @@ class BiliNovelSource implements LightNovelSource {
     );
   }
 
-  Future<Map<String, int>?> _getShuffleParams(Document doc) async {
+  Future<Map<String, int>?> _getShuffleParams(Document doc) {
     return _chapterLogResolver.getShuffleParams(doc);
   }
 
-  void _shuffle(Element content, Map<String, int> shuffleParams) {
-    var pElements = content
-        .querySelectorAll("p")
-        .where((p) => p.text.trim().isNotEmpty)
-        .toList();
-    var paragraphs = [];
-    for (var i = 0; i < pElements.length; i++) {
-      var node = pElements[i];
-      paragraphs.add(node);
-    }
-
-    if (paragraphs.isEmpty) {
-      return;
-    }
-    var nodes = content.children;
-
-    var indices = [];
-    List<int> fixed = [];
-    List<int> shuffled = [];
-
-    int fixedLength = shuffleParams["fixedLength"]!;
-    for (var i = 0; i < paragraphs.length; i++) {
-      i < fixedLength ? fixed.add(i) : shuffled.add(i);
-    }
-
-    if (paragraphs.length > fixedLength) {
-      _shuffleArr(shuffled, shuffleParams);
-      indices = [...fixed, ...shuffled];
-    } else {
-      indices = [...fixed];
-    }
-
-    List<Element> mapped = List.filled(paragraphs.length, Element.tag("p"));
-    for (var i = 0; i < paragraphs.length; i++) {
-      mapped[indices[i]] = paragraphs[i];
-    }
-    var replacedIndex = 0;
-    for (var i = 0; i < nodes.length; i++) {
-      var node = nodes[i];
-      if (node.localName == 'p' && node.text.trim().isNotEmpty) {
-        content.children[i] = mapped[replacedIndex++].clone(true);
-      }
-    }
-  }
-
-  _shuffleArr(List<int> arr, Map<String, int> shuffleParams) {
-    int a = shuffleParams["a"]!;
-    int c = shuffleParams["c"]!;
-    int mod = shuffleParams["mod"]!;
-    int seed = shuffleParams["seed"]!;
-    for (int i = arr.length - 1; i > 0; i--) {
-      seed = (seed * a + c) % mod;
-      int j = (seed / mod * (i + 1)).floor();
-      int tmp = arr[i];
-      arr[i] = arr[j];
-      arr[j] = tmp;
-    }
-    return arr;
-  }
-
-  _replaceImageSrc(Element element) {
+  void _replaceImageSrc(Element element) {
     List<Element> images = element.querySelectorAll("img");
     for (var image in images) {
       String? src = image.attributes["data-src"];
@@ -438,7 +363,7 @@ class BiliNovelSource implements LightNovelSource {
     }
   }
 
-  _removeImageAttr(Element image) {
+  void _removeImageAttr(Element image) {
     var attrs = [
       "alt",
       "class",
