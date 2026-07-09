@@ -24,6 +24,40 @@ class BiliNovelSource implements LightNovelSource {
   static final String userAgent =
       "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36";
 
+  static const List<String> _contentSelectors = ["#acontent", ".bcontent"];
+  static const int _maxChapterUrlProbeCount = 20;
+  static const List<String> _contentRemoveSelectors = [
+    "div",
+    "ins",
+    "figure",
+    "fig",
+    "br",
+    "script",
+    ".tp",
+    ".bd",
+  ];
+  static const Set<String> _previousPageTexts = {"上一页", "上一頁"};
+  static const Set<String> _nextPageTexts = {"下一页", "下一頁"};
+  static const Set<String> _allowedImageAttributes = {
+    "alt",
+    "class",
+    "dir",
+    "height",
+    "id",
+    "ismap",
+    "lang",
+    "longdesc",
+    "style",
+    "title",
+    "usemap",
+    "width",
+    "src",
+    "xml:lang",
+  };
+  static final RegExp _pageUrlRegExp = RegExp(
+    "url_previous:'(.*?)',url_next:'(.*?)'",
+  );
+
   late final Dio _dio;
   late final Dio _imageDio;
   late final BiliChapterLogResolver _chapterLogResolver =
@@ -37,29 +71,41 @@ class BiliNovelSource implements LightNovelSource {
       );
 
   BiliNovelSource() {
-    var headers = {
-      "Accept": "*/*",
-      "Accept-Language": "zh-CN,zh;q=0.9",
-      "Cookie": "night=0",
-      "Referer": domain,
-      "User-Agent": userAgent,
-    };
-    var options = BaseOptions(
+    var options = _createBaseOptions();
+    _dio = _createTextDio(options);
+    _imageDio = _createImageDio(options);
+  }
+
+  BaseOptions _createBaseOptions() {
+    return BaseOptions(
       baseUrl: domain,
-      headers: headers,
+      headers: {
+        "Accept": "*/*",
+        "Accept-Language": "zh-CN,zh;q=0.9",
+        "Cookie": "night=0",
+        "Referer": domain,
+        "User-Agent": userAgent,
+      },
       responseType: ResponseType.plain,
       validateStatus: (status) {
         if (status == null) return false;
         return status >= 200 && status < 400;
       },
     );
-    _dio = Dio(options);
-    _dio.interceptors.add(RateLimitInterceptor(15, Duration(minutes: 1)));
-    _dio.interceptors.add(LoggingInterceptor());
-    _dio.interceptors.add(RedirectInterceptor(_dio));
+  }
 
-    _imageDio = Dio(options.copyWith(responseType: ResponseType.bytes));
-    _imageDio.interceptors.add(RateLimitInterceptor(10, Duration(minutes: 1)));
+  Dio _createTextDio(BaseOptions options) {
+    var dio = Dio(options);
+    dio.interceptors.add(RateLimitInterceptor(15, Duration(minutes: 1)));
+    dio.interceptors.add(LoggingInterceptor());
+    dio.interceptors.add(RedirectInterceptor(dio));
+    return dio;
+  }
+
+  Dio _createImageDio(BaseOptions options) {
+    var dio = Dio(options.copyWith(responseType: ResponseType.bytes));
+    dio.interceptors.add(RateLimitInterceptor(10, Duration(minutes: 1)));
+    return dio;
   }
 
   @override
@@ -73,43 +119,39 @@ class BiliNovelSource implements LightNovelSource {
   Future<Novel> getNovel(String url) async {
     String id = _getId(url);
     String actualUrl = "$domain/novel/$id.html";
-    Novel novel = Novel();
     String html = (await _dio.get(actualUrl)).toString();
     try {
-      var doc = parse(html);
-      novel.id = id.toString();
-      novel.url = url;
-      novel.title = doc.querySelector(".book-title")!.text;
-
-      // 解析别名信息
-      var backupNameElement = doc.querySelector(
-        ".backupname .bkname-body.gray",
-      );
-      if (backupNameElement != null) {
-        novel.alias = backupNameElement.text.trim();
-      }
-
-      novel.coverUrl = doc
-          .querySelector(".book-layout img")!
-          .attributes["src"]!;
-      novel.tags = doc
-          .querySelectorAll(".book-cell .book-meta span em")
-          .map((e) => e.text)
-          .toList();
-      novel.publisher = doc.querySelector(".tag-small.orange")?.text;
-      novel.status = doc
-          .querySelector(".book-cell .book-meta+.book-meta")!
-          .nodes
-          .last
-          .text!;
-      novel.author = doc.querySelector(".book-rand-a span")!.text;
-      novel.description = doc.querySelector("#bookSummary content")!.text;
-      return novel;
+      return _parseNovel(url, id, parse(html));
     } catch (e) {
       logger.e(e);
       logger.i(html);
       rethrow;
     }
+  }
+
+  Novel _parseNovel(String url, String id, Document doc) {
+    return Novel()
+      ..id = id
+      ..url = url
+      ..title = doc.querySelector(".book-title")!.text
+      ..alias = _getNovelAlias(doc)
+      ..coverUrl = doc.querySelector(".book-layout img")!.attributes["src"]!
+      ..tags = doc
+          .querySelectorAll(".book-cell .book-meta span em")
+          .map((e) => e.text)
+          .toList()
+      ..publisher = doc.querySelector(".tag-small.orange")?.text
+      ..status = doc
+          .querySelector(".book-cell .book-meta+.book-meta")!
+          .nodes
+          .last
+          .text!
+      ..author = doc.querySelector(".book-rand-a span")!.text
+      ..description = doc.querySelector("#bookSummary content")!.text;
+  }
+
+  String? _getNovelAlias(Document doc) {
+    return doc.querySelector(".backupname .bkname-body.gray")?.text.trim();
   }
 
   String _getId(String url) {
@@ -128,78 +170,131 @@ class BiliNovelSource implements LightNovelSource {
     var doc = parse(html);
     var catalog = Catalog(novel);
     _replaceImageSrc(doc.body!);
-    Volume? volume;
-    // 如果没有卷标题 则将书名直接作为卷名
-    if (doc.querySelector(".chapter-bar") == null) {
-      volume = Volume("", catalog);
-    }
-    var lis = doc.querySelectorAll(".volume-chapters>li");
-    if (lis.isEmpty) {
+
+    var items = _getCatalogItems(url, html, doc);
+    _parseCatalogItems(catalog, doc, items);
+    return catalog;
+  }
+
+  List<Element> _getCatalogItems(String url, String html, Document doc) {
+    var items = doc.querySelectorAll(".volume-chapters>li");
+    if (items.isEmpty) {
       logger.i("GET $url");
       logger.i(html);
       throw "目录获取为空";
     }
-    for (var li in lis) {
-      if (li.classes.contains("chapter-bar")) {
-        if (volume != null) {
-          catalog.volumes.add(volume);
-        }
-        volume = Volume(li.text, catalog);
-      } else if (li.classes.contains("volume-cover")) {
-        volume?.cover = li
-            .querySelector("a")
-            ?.querySelector("img")
-            ?.attributes["src"];
-      } else if (li.classes.contains("jsChapter")) {
-        var link = li.querySelector("a")!;
-        String name = link.text;
-        String? href = link.attributes["href"];
-        if (href == null || href.contains("javascript")) {
-          href = null;
-        } else {
-          href = "$domain$href";
-        }
-        if (volume != null) {
-          var chapter = Chapter(name, href, volume);
-          volume.chapters.add(chapter);
-        }
-      }
-    }
+    return items;
+  }
 
+  void _parseCatalogItems(
+    Catalog catalog,
+    Document doc,
+    List<Element> items,
+  ) {
+    Volume? volume = _createInitialVolume(catalog, doc);
+    for (var item in items) {
+      volume = _parseCatalogItem(catalog, volume, item);
+    }
     if (volume != null) {
       catalog.volumes.add(volume);
     }
-    return catalog;
+  }
+
+  Volume? _createInitialVolume(Catalog catalog, Document doc) {
+    // 如果没有卷标题，则将书名直接作为卷名。
+    if (doc.querySelector(".chapter-bar") == null) {
+      return Volume("", catalog);
+    }
+    return null;
+  }
+
+  Volume? _parseCatalogItem(
+    Catalog catalog,
+    Volume? volume,
+    Element item,
+  ) {
+    if (item.classes.contains("chapter-bar")) {
+      if (volume != null) {
+        catalog.volumes.add(volume);
+      }
+      return Volume(item.text, catalog);
+    }
+
+    if (item.classes.contains("volume-cover")) {
+      volume?.cover = item
+          .querySelector("a")
+          ?.querySelector("img")
+          ?.attributes["src"];
+      return volume;
+    }
+
+    if (item.classes.contains("jsChapter") && volume != null) {
+      volume.chapters.add(_parseCatalogChapter(item, volume));
+    }
+    return volume;
+  }
+
+  Chapter _parseCatalogChapter(Element item, Volume volume) {
+    var link = item.querySelector("a")!;
+    return Chapter(
+      link.text,
+      _normalizeChapterHref(link.attributes["href"]),
+      volume,
+    );
+  }
+
+  String? _normalizeChapterHref(String? href) {
+    if (href == null || href.contains("javascript")) {
+      return null;
+    }
+    return "$domain$href";
   }
 
   @override
   Future<Document> getNovelChapter(Chapter chapter) async {
     Document doc = Document.html(LightNovelSource.html);
 
+    String chapterUrl = await _requireChapterUrl(chapter);
+    logger.i(
+      " ==> ${chapter.volume.volumeName} ${chapter.chapterName} ${chapter.chapterUrl}",
+    );
+    String? nextPageUrl = chapterUrl;
+    do {
+      ChapterPage page = await _getChapterPage(nextPageUrl!);
+      _updateChapterName(chapter, page);
+      _appendChapterPage(doc, page);
+      nextPageUrl = page.nextPageUrl;
+    } while (nextPageUrl != null);
+
+    return _finalizeChapterDocument(doc);
+  }
+
+  Future<String> _requireChapterUrl(Chapter chapter) async {
     chapter.chapterUrl ??= await _getChapterUrl(chapter);
     if (chapter.chapterUrl == null) {
       throw "Empty chapter url";
     }
-    logger.i(
-      " ==> ${chapter.volume.volumeName} ${chapter.chapterName} ${chapter.chapterUrl}",
-    );
-    String? nextPageUrl = chapter.chapterUrl!;
-    do {
-      ChapterPage page = await _getChapterPage(nextPageUrl!);
-      // 处理目录标题与章节中获取的标题不一致情况
-      if (page.title != null &&
-          page.title != chapter.chapterName &&
-          !page.title!.contains("〇")) {
-        chapter.chapterName = page.title!;
-      }
-      for (var content in page.contents) {
-        doc.body!.append(content);
-      }
-      nextPageUrl = page.nextPageUrl;
-    } while (nextPageUrl != null);
+    return chapter.chapterUrl!;
+  }
 
+  void _updateChapterName(Chapter chapter, ChapterPage page) {
+    // 处理目录标题与章节中获取的标题不一致情况。
+    if (page.title != null &&
+        page.title != chapter.chapterName &&
+        !page.title!.contains("〇")) {
+      chapter.chapterName = page.title!;
+    }
+  }
+
+  void _appendChapterPage(Document doc, ChapterPage page) {
+    for (var content in page.contents) {
+      doc.body!.append(content);
+    }
+  }
+
+  Document _finalizeChapterDocument(Document doc) {
     HTMLUtil.removeLineBreak(doc.body!);
-    // 处理图片lazy load 实际src为data-src
+    // 处理图片 lazy load，实际 src 为 data-src。
     _replaceImageSrc(doc.body!);
     return doc;
   }
@@ -209,53 +304,63 @@ class BiliNovelSource implements LightNovelSource {
       return chapter.chapterUrl;
     }
     Catalog catalog = chapter.volume.catalog;
-    // 先获取下一章节 再通过下一章节中的"上一章"获取链接
-    var nextChapter = _getNextChapter(catalog, chapter);
-    if (nextChapter != null && nextChapter.chapterUrl != null) {
-      ChapterPage chapterPage = await _getChapterPage(nextChapter.chapterUrl!);
-      if (chapterPage.prevChapterUrl != null) {
-        return chapterPage.prevChapterUrl;
-      }
+    return await _findChapterUrlFromNextChapter(catalog, chapter) ??
+        await _findChapterUrlFromPrevChapter(catalog, chapter);
+  }
+
+  Future<String?> _findChapterUrlFromNextChapter(
+    Catalog catalog,
+    Chapter chapter,
+  ) async {
+    // 先获取下一章，再通过下一章页面中的“上一章”反推出当前章节链接。
+    Chapter? nextChapter = _getNextChapter(catalog, chapter);
+    if (nextChapter?.chapterUrl == null) {
+      return null;
     }
-    // 先获取上一章节 再通过上一章节的"下一页"一直到"下一章"获取链接
-    var prevChapter = _getPrevChapter(catalog, chapter);
-    if (prevChapter != null && prevChapter.chapterUrl != null) {
-      ChapterPage chapterPage = await _getChapterPage(prevChapter.chapterUrl!);
-      String? nextPageUrl;
-      ChapterPage page = chapterPage;
-      for (int i = 0; i < 20; i++) {
-        nextPageUrl = page.nextPageUrl;
-        if (nextPageUrl == null) {
-          return page.nextChapterUrl;
-        }
-        page = await _getChapterPage(nextPageUrl);
+
+    ChapterPage chapterPage = await _getChapterPage(nextChapter!.chapterUrl!);
+    return chapterPage.prevChapterUrl;
+  }
+
+  Future<String?> _findChapterUrlFromPrevChapter(
+    Catalog catalog,
+    Chapter chapter,
+  ) async {
+    // 先获取上一章，再沿着“下一页”走到末页，从末页的“下一章”拿当前章节链接。
+    Chapter? prevChapter = _getPrevChapter(catalog, chapter);
+    if (prevChapter?.chapterUrl == null) {
+      return null;
+    }
+
+    ChapterPage page = await _getChapterPage(prevChapter!.chapterUrl!);
+    for (int i = 0; i < _maxChapterUrlProbeCount; i++) {
+      String? nextPageUrl = page.nextPageUrl;
+      if (nextPageUrl == null) {
+        return page.nextChapterUrl;
       }
+      page = await _getChapterPage(nextPageUrl);
     }
     return null;
   }
 
   // 根据目录查找上一章
   Chapter? _getPrevChapter(Catalog catalog, Chapter chapter) {
-    List<Chapter> allChapter = catalog.volumes
-        .expand(
-          (volume) => volume.chapters,
-        )
-        .toList();
-    int pos = allChapter.indexOf(chapter);
+    List<Chapter> chapters = _getAllChapters(catalog);
+    int pos = chapters.indexOf(chapter);
     if (pos < 1) return null;
-    return allChapter[pos - 1];
+    return chapters[pos - 1];
   }
 
   // 根据目录查找下一章
   Chapter? _getNextChapter(Catalog catalog, Chapter chapter) {
-    List<Chapter> chapters = catalog.volumes
-        .expand(
-          (volume) => volume.chapters,
-        )
-        .toList();
+    List<Chapter> chapters = _getAllChapters(catalog);
     int pos = chapters.indexOf(chapter);
     if (pos < 0 || pos >= chapters.length - 1) return null;
     return chapters[pos + 1];
+  }
+
+  List<Chapter> _getAllChapters(Catalog catalog) {
+    return catalog.volumes.expand((volume) => volume.chapters).toList();
   }
 
   @override
@@ -268,72 +373,95 @@ class BiliNovelSource implements LightNovelSource {
     String html = (await _dio.get(url)).toString();
     var doc = parse(html);
 
-    String? title;
-    if (!url.contains("_")) {
-      title = doc.querySelector("#atitle")?.text;
+    String? title = _getChapterPageTitle(url, doc);
+    Element content = _getChapterPageContent(url, html, doc);
+    _ChapterNavigation navigation = _getChapterNavigation(doc);
+    _cleanChapterContent(content);
+    await _restoreChapterContent(doc, content);
+
+    return ChapterPage(
+      title: title,
+      content.children,
+      prevPageUrl: navigation.prevPageUrl,
+      nextPageUrl: navigation.nextPageUrl,
+      prevChapterUrl: navigation.prevChapterUrl,
+      nextChapterUrl: navigation.nextChapterUrl,
+    );
+  }
+
+  String? _getChapterPageTitle(String url, Document doc) {
+    if (url.contains("_")) {
+      return null;
     }
-    var selectors = ["#acontent", ".bcontent"];
-    var content = selectors
+    return doc.querySelector("#atitle")?.text;
+  }
+
+  Element _getChapterPageContent(String url, String html, Document doc) {
+    Element? content = _contentSelectors
         .map((selector) => doc.querySelector(selector))
         .firstOrNull;
     if (content == null) {
       logger.i("GET $url ERROR");
       logger.i(html);
       throw "运行出错，请提交Issues并上传日志文件($logFilePath)，下次运行会清空日志。";
-    } else {
-      logger.i("GET $url OK");
     }
+
+    logger.i("GET $url OK");
+    return content;
+  }
+
+  _ChapterNavigation _getChapterNavigation(Document doc) {
+    RegExpMatch? match = _pageUrlRegExp.firstMatch(doc.outerHtml);
+    String? prevUrl = match?.group(1);
+    String? nextUrl = match?.group(2);
+    Element? prev = doc.querySelector("#footlink a:first-child");
+    Element? next = doc.querySelector("#footlink a:last-child");
 
     String? prevPage;
     String? nextPage;
     String? prevChapter;
     String? nextChapter;
 
-    RegExp regExp = RegExp("url_previous:'(.*?)',url_next:'(.*?)'");
-    RegExpMatch? match = regExp.firstMatch(doc.outerHtml);
-    String? prevUrl = match?.group(1);
-    String? nextUrl = match?.group(2);
-    var prev = doc.querySelector("#footlink a:first-child");
-    var next = doc.querySelector("#footlink a:last-child");
-
-    if (prev != null &&
-        (prev.text == "上一页" || prev.text == "上一頁") &&
-        prevUrl != null) {
-      prevPage = domain + prevUrl;
-    } else if (prev != null && prevUrl != null) {
-      prevChapter = domain + prevUrl;
+    if (prev != null && prevUrl != null) {
+      if (_isPageLink(prev, _previousPageTexts)) {
+        prevPage = domain + prevUrl;
+      } else {
+        prevChapter = domain + prevUrl;
+      }
     }
 
-    if (next != null &&
-        (next.text == "下一页" || next.text == "下一頁") &&
-        nextUrl != null) {
-      nextPage = domain + nextUrl;
-    } else if (next != null && nextUrl != null) {
-      nextChapter = domain + nextUrl;
-    }
-    HTMLUtil.removeElements(content.querySelectorAll("div"));
-    HTMLUtil.removeElements(content.querySelectorAll("ins"));
-    HTMLUtil.removeElements(content.querySelectorAll("figure"));
-    HTMLUtil.removeElements(content.querySelectorAll("fig"));
-    HTMLUtil.removeElements(content.querySelectorAll("br"));
-    HTMLUtil.removeElements(content.querySelectorAll("script"));
-    HTMLUtil.removeElements(content.querySelectorAll(".tp"));
-    HTMLUtil.removeElements(content.querySelectorAll(".bd"));
-    HTMLUtil.removeElementsByPattern(content, r"[a-z]\d{4}");
-
-    Map<String, int>? params = await _getShuffleParams(doc);
-    if (params != null) {
-      BiliNovelRestore.restore(content, params);
+    if (next != null && nextUrl != null) {
+      if (_isPageLink(next, _nextPageTexts)) {
+        nextPage = domain + nextUrl;
+      } else {
+        nextChapter = domain + nextUrl;
+      }
     }
 
-    return ChapterPage(
-      title: title,
-      content.children,
+    return _ChapterNavigation(
       prevPageUrl: prevPage,
       nextPageUrl: nextPage,
       prevChapterUrl: prevChapter,
       nextChapterUrl: nextChapter,
     );
+  }
+
+  bool _isPageLink(Element? link, Set<String> pageTexts) {
+    return link != null && pageTexts.contains(link.text);
+  }
+
+  void _cleanChapterContent(Element content) {
+    for (var selector in _contentRemoveSelectors) {
+      HTMLUtil.removeElements(content.querySelectorAll(selector));
+    }
+    HTMLUtil.removeElementsByPattern(content, r"[a-z]\d{4}");
+  }
+
+  Future<void> _restoreChapterContent(Document doc, Element content) async {
+    Map<String, int>? params = await _getShuffleParams(doc);
+    if (params != null) {
+      BiliNovelRestore.restore(content, params);
+    }
   }
 
   Future<Map<String, int>?> _getShuffleParams(Document doc) {
@@ -364,24 +492,8 @@ class BiliNovelSource implements LightNovelSource {
   }
 
   void _removeImageAttr(Element image) {
-    var attrs = [
-      "alt",
-      "class",
-      "dir",
-      "height",
-      "id",
-      "ismap",
-      "lang",
-      "longdesc",
-      "style",
-      "title",
-      "usemap",
-      "width",
-      "src",
-      "xml:lang",
-    ];
     for (var attr in image.attributes.keys.toList()) {
-      if (!attrs.contains(attr as String)) {
+      if (!_allowedImageAttributes.contains(attr as String)) {
         image.attributes.remove(attr);
       }
     }
@@ -405,6 +517,20 @@ class BiliNovelSource implements LightNovelSource {
     src = src.replaceAll("\ud835\ude23", "b");
     return _imageDio.get<Uint8List>(src).then((res) => res.data!);
   }
+}
+
+class _ChapterNavigation {
+  final String? prevPageUrl;
+  final String? nextPageUrl;
+  final String? prevChapterUrl;
+  final String? nextChapterUrl;
+
+  const _ChapterNavigation({
+    this.prevPageUrl,
+    this.nextPageUrl,
+    this.prevChapterUrl,
+    this.nextChapterUrl,
+  });
 }
 
 class ChapterPage {
