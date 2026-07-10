@@ -51,7 +51,7 @@ class WenkuNovelSource implements LightNovelSource {
     );
     _dio = Dio(options);
     _dio.interceptors.add(RateLimitInterceptor(20, Duration(minutes: 1)));
-    _dio.interceptors.add(LoggingInterceptor());
+    _dio.interceptors.add(LoggingInterceptor(printer: logger.i));
   }
 
   @override

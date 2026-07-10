@@ -97,7 +97,7 @@ class BiliNovelSource implements LightNovelSource {
   Dio _createTextDio(BaseOptions options) {
     var dio = Dio(options);
     dio.interceptors.add(RateLimitInterceptor(15, Duration(minutes: 1)));
-    dio.interceptors.add(LoggingInterceptor());
+    dio.interceptors.add(LoggingInterceptor(printer: logger.i));
     dio.interceptors.add(RedirectInterceptor(dio));
     return dio;
   }
