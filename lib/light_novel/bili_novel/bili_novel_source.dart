@@ -414,8 +414,8 @@ class BiliNovelSource implements LightNovelSource {
     RegExpMatch? match = _pageUrlRegExp.firstMatch(doc.outerHtml);
     String? prevUrl = match?.group(1);
     String? nextUrl = match?.group(2);
-    Element? prev = doc.querySelector("#footlink a:first-child");
-    Element? next = doc.querySelector("#footlink a:last-child");
+    Element? prev = doc.querySelector("#footlink a.prevlink");
+    Element? next = doc.querySelector("#footlink a.nextlink");
 
     String? prevPage;
     String? nextPage;
