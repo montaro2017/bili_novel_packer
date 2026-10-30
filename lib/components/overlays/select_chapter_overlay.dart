@@ -43,47 +43,64 @@ class _SelectChapterOverlayState extends State<SelectChapterOverlay> {
     var width = 4;
     for (final volume in volumes) {
       for (final line in volume.volumeName.split('\n')) {
-        // 三格选择标记 + 一格间距。
-        width = math.max(width, 4 + UnicodeWidth.stringWidth(line));
+        // 三格选择标记 + 一格间距 + 滚动条 + 一格间距
+        width = math.max(width, 4 + 2 + UnicodeWidth.stringWidth(line));
       }
     }
     return width.toDouble();
   }
 
-  TextSpan _buildHelpText(int selectedCount) => TextSpan(
-    children: [
-      TextSpan(
-        text: "↑/↓: ",
-        style: TextStyle(color: mutedColor),
-      ),
-      TextSpan(text: "导航 "),
-      TextSpan(
-        text: "←/→: ",
-        style: TextStyle(color: mutedColor),
-      ),
-      TextSpan(text: "翻页 "),
-      TextSpan(
-        text: "Space: ",
-        style: TextStyle(color: mutedColor),
-      ),
-      TextSpan(text: "选择 "),
-      TextSpan(
-        text: "A: ",
-        style: TextStyle(color: mutedColor),
-      ),
-      TextSpan(text: "切换 "),
-      TextSpan(
-        text: "Enter: ",
-        style: TextStyle(color: mutedColor),
-      ),
-      TextSpan(text: "确认 "),
-      TextSpan(
-        text: "Esc: ",
-        style: TextStyle(color: mutedColor),
-      ),
-      TextSpan(text: "取消"),
-    ],
-  );
+  Component _buildHelpText() {
+    return Row(
+      children: [
+        Text(
+          "↑/↓: ",
+          style: TextStyle(color: mutedColor),
+        ),
+        Text("导航  "),
+        Text(
+          "←/→: ",
+          style: TextStyle(color: mutedColor),
+        ),
+        Text("翻页"),
+        Text(
+          "Space: ",
+          style: TextStyle(color: mutedColor),
+        ),
+        Text("选择"),
+        // 全选
+        GestureDetector(
+          onTap: _toggleAll,
+          child: Row(
+            children: [
+              Text("A: ", style: TextStyle(color: mutedColor)),
+              Text("全选"),
+            ],
+          ),
+        ),
+        // 确认
+        GestureDetector(
+          onTap: _confirm,
+          child: Row(
+            children: [
+              Text("Enter:", style: TextStyle(color: mutedColor)),
+              Text("确认  "),
+            ],
+          ),
+        ),
+        // 取消
+        GestureDetector(
+          onTap: _cancel,
+          child: Row(
+            children: [
+              Text("Esc: ", style: TextStyle(color: mutedColor)),
+              Text("取消"),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
 
   @override
   void initState() {
@@ -119,35 +136,39 @@ class _SelectChapterOverlayState extends State<SelectChapterOverlay> {
                 alignment: Alignment.topCenter,
                 child: SizedBox(
                   width: _listWidth,
-                  child: ListView.builder(
+                  child: Scrollbar(
                     controller: scrollController,
-                    itemExtent: 1,
-                    itemCount: volumes.length,
-                    itemBuilder: (context, index) {
-                      return _buildItem(
-                        volumes[index],
-                        index,
-                        hoverIndex == index,
-                        selectedMap[index] ?? false,
-                      );
-                    },
+                    thumbVisibility: true,
+                    child: ListView.builder(
+                      controller: scrollController,
+                      itemExtent: 1,
+                      itemCount: volumes.length,
+                      itemBuilder: (context, index) {
+                        return _buildItem(
+                          volumes[index],
+                          index,
+                          hoverIndex == index,
+                          selectedMap[index] ?? false,
+                        );
+                      },
+                    ),
                   ),
                 ),
               ),
             ),
             SizedBox(height: 1),
-            Row(
-              mainAxisAlignment: .center,
-              children: [
-                Text("已选: "),
-                Text(
-                  "${selectedVolumes.length}/${volumes.length}",
-                  style: TextStyle(color: mutedColor),
-                ),
-              ],
-            ),
-            SizedBox(height: 1),
-            RichText(text: _buildHelpText(selectedVolumes.length)),
+            // Row(
+            //   mainAxisAlignment: .center,
+            //   children: [
+            //     Text("已选: "),
+            //     Text(
+            //       "${selectedVolumes.length}/${volumes.length}",
+            //       style: TextStyle(color: mutedColor),
+            //     ),
+            //   ],
+            // ),
+            // SizedBox(height: 1),
+            _buildHelpText(),
           ],
         ),
       ),
@@ -159,7 +180,8 @@ class _SelectChapterOverlayState extends State<SelectChapterOverlay> {
       _toggleAll();
       return true;
     }
-    if (event.logicalKey == LogicalKey.space) {
+    if (event.logicalKey == LogicalKey.space ||
+        event.logicalKey == LogicalKey.digit5) {
       _selectHover();
       return true;
     }
@@ -186,13 +208,12 @@ class _SelectChapterOverlayState extends State<SelectChapterOverlay> {
       return true;
     }
     if (event.logicalKey == LogicalKey.enter) {
-      if (selectedVolumes.isNotEmpty) {
-        component.onConfirm?.call(selectedVolumes);
-      }
+      _confirm();
       return true;
     }
     if (event.logicalKey == LogicalKey.escape) {
-      component.onCancel?.call();
+      _cancel();
+      return true;
     }
     return false;
   }
@@ -261,6 +282,16 @@ class _SelectChapterOverlayState extends State<SelectChapterOverlay> {
         }
       });
     }
+  }
+
+  void _confirm() {
+    if (selectedVolumes.isNotEmpty) {
+      component.onConfirm?.call(selectedVolumes);
+    }
+  }
+
+  void _cancel() {
+    component.onCancel?.call();
   }
 
   Component _buildItem(Volume volume, int index, bool hover, bool selected) {
