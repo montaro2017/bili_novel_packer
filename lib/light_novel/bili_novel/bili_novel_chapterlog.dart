@@ -16,19 +16,25 @@ class BiliChapterLogResolver {
   });
 
   Future<Map<String, int>?> getShuffleParams(Document doc) async {
-    var script = doc
-        .querySelectorAll("script")
-        .where((s) => s.attributes["src"]?.contains("chapterlog.js?v") ?? false)
-        .firstOrNull;
+    var script = doc.querySelectorAll("script").where((s) {
+      String? src = s.attributes["src"];
+      Uri? uri = src == null ? null : Uri.tryParse(src);
+      return uri != null && uri.path.split('/').last == 'chapterlog.js';
+    }).firstOrNull;
     if (script == null) {
       return null;
     }
 
     int? chapterId = int.tryParse(
-      RegExp("chapterid:'(\\d+)'").firstMatch(doc.outerHtml)?.group(1) ?? '',
+      RegExp(
+            r'''["']?chapterid["']?\s*:\s*["'](\d+)["']''',
+          ).firstMatch(doc.outerHtml)?.group(1) ??
+          '',
     );
     if (chapterId == null) {
-      return null;
+      throw FormatException(
+        'chapterlog.js is present but the chapter ID is missing or invalid',
+      );
     }
 
     String jsSrc = script.attributes["src"]!;
