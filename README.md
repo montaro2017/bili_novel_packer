@@ -55,44 +55,15 @@
 
 网站会更新反爬策略，需要更新后才能使用，使用时请确保使用的是最新版，如果最新版也无法使用，请反馈Issues。
 
-### 为什么打包速度这么慢
+### 打包速度慢
 
-网站有RateLimit速度限制，请求速度过快会被限制访问。
+部分网站有速率限制，请求速度过快会被限制访问，只能低速请求。
 
 ### 如何修改封面图片
 
-1. 以ZIP方式解压EPUB文件
-2. 编辑`OEBPS/content.opf`文件
+建议使用Calibre修改。
 
-如果`OEBPS/images`文件夹内没有封面图片
-
-1. 添加图片到`images`目录下
-2. 在`OEBPS/content.opf`文件的`manifest`中添加一行`<item id="images\000001.jpg" href="images/000001.jpg" media-type="image/jpeg"/>`
-3. 将上面的`000001.jpg`改成对应图片的名称，不要修改斜杠和反斜杠
-
-修改封面
-
-1. 找到`<item id="cover-image" href="images/000035.jpg" media-type="image/jpeg"/>`这一行
-2. 将href的值改成图片的路径
-3. 压缩成ZIP，修改后缀为EPUB
-
-## 编译
-
-由于Dart暂不支持交叉编译，因此仅提供windows版本的编译产物，如需在其他系统上使用，请自行下载编译。
-
-### windows
-执行目录下的[**compile.bat**](./compile.bat)即可。
-
-或者执行
-```
-dart compile exe bin/main.dart -o ./build/bili_novel_packer.exe
-```
-
-### 其他系统
-同windows，修改打包后的文件名即可
-```
-dart compile exe bin/main.dart -o ./build/bili_novel_packer
-```
+使用Calibre以编辑模式打开EPUB，左侧列表双击图片查看，右键选择标记为封面保存即可。
 
 ## Star History
 

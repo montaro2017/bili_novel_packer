@@ -9,14 +9,16 @@ dev_dependencies:
   lints: ^6.1.0
   test: ^1.16.0
 dependencies:
-  archive: ^4.0.9
+  characters: ^1.4.1
+  archive: ^4.5.2
   fast_gbk: ^1.0.0
-  html: ^0.15.4
-  intl: ^0.20.2
-  logger: ^2.4.0
+  html: ^0.15.7
+  intl: ^0.20.3
+  logger: ^2.8.0
   path: ^1.8.3
-  synchronized: ^3.4.1
+  synchronized: ^3.5.0
   uuid: ^4.5.3
   xml: ^7.0.1
-  dio: ^5.9.0
+  dio: ^5.11.1
   gbk_codec: ^0.4.0
+  nocterm: ^0.9.0

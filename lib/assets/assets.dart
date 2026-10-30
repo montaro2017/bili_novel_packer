@@ -5,8 +5,7 @@ ArchiveFile styleCss() {
     "OEBPS/styles/style.css",
     """.chapter-title {
     margin-top: 0.5em!important;
-    font-size: 1.25em!important;
-    font-weight: 800!important;
+    font-size: 1.8em!important;
     text-align: center!important;
   }""",
   );

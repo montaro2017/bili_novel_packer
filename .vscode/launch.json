@@ -1,0 +1,12 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "调试",
+      "type": "dart",
+      "request": "launch",
+      "program": "bin/main.dart",
+      "console": "externalTerminal"
+    }
+  ]
+}
