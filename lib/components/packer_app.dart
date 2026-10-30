@@ -1,4 +1,5 @@
 import 'package:bili_novel_packer/colors.dart';
+import 'package:bili_novel_packer/components/clickable.dart';
 import 'package:bili_novel_packer/components/novel_item.dart';
 import 'package:bili_novel_packer/const.dart';
 import 'package:bili_novel_packer/light_novel/base/light_novel_source.dart';
@@ -106,7 +107,7 @@ class _PackerAppState extends State<PackerApp> {
                   focused: focused,
                   onKeyEvent: (event) {
                     if (event.logicalKey == LogicalKey.tab) {
-                      toggleWorkMode();
+                      _toggleWorkMode();
                       return true;
                     }
                     if (event.logicalKey == LogicalKey.pageUp) {
@@ -120,7 +121,7 @@ class _PackerAppState extends State<PackerApp> {
                     return false;
                   },
                   placeholder: "请输入链接，多个链接使用空格分开",
-                  onSubmitted: onSubmitted,
+                  onSubmitted: _onSubmitted,
                   onChanged: (_) {
                     setState(() {
                       errMsg = null;
@@ -149,10 +150,22 @@ class _PackerAppState extends State<PackerApp> {
                 style: TextStyle(color: mutedColor),
               ),
               Text(" · "),
-              Text(mode.label),
-              Text(
-                "(Tab 切换 | ${mode.desc})",
-                style: TextStyle(color: mutedColor),
+              Clickable(
+                onClick: _toggleWorkMode,
+                builder: (hover) => Row(
+                  children: [
+                    Text(
+                      mode.label,
+                      style: TextStyle(color: hover ? primaryColor : null),
+                    ),
+                    Text(
+                      "(Tab 切换 | ${mode.desc})",
+                      style: TextStyle(
+                        color: hover ? primaryColor : mutedColor,
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ],
           ),
@@ -161,20 +174,20 @@ class _PackerAppState extends State<PackerApp> {
     );
   }
 
-  void toggleWorkMode() {
+  void _toggleWorkMode() {
     setState(() {
       mode = mode == .manual ? .auto : .manual;
       items = items.map((item) => item.copyWith(mode: mode)).toList();
     });
   }
 
-  void onSubmitted(String input) {
+  void _onSubmitted(String input) {
     try {
       var addLinks = _parse(input);
       textController.clear();
       setState(() {
         links.addAll(addLinks);
-        workNext();
+        _workNext();
       });
     } catch (e) {
       setState(() {
@@ -183,20 +196,20 @@ class _PackerAppState extends State<PackerApp> {
     }
   }
 
-  void onStatusChanged(int idx, WorkStatus status) {
+  void _onStatusChanged(int idx, WorkStatus status) {
     setState(() {
       statuses[idx] = status;
     });
-    workNext();
+    _workNext();
   }
 
-  void onChildRequestFocus(bool requestFocus) {
+  void _onChildRequestFocus(bool requestFocus) {
     setState(() {
       focused = !requestFocus;
     });
   }
 
-  void workNext() {
+  void _workNext() {
     if (links.isEmpty) {
       return;
     }
@@ -217,9 +230,10 @@ class _PackerAppState extends State<PackerApp> {
             link: links[idx!],
             mode: mode,
             onStatusChanged: (s) {
-              onStatusChanged(idx!, s);
+              _onStatusChanged(idx!, s);
             },
-            onRequestFocus: (requestFocus) => onChildRequestFocus(requestFocus),
+            onRequestFocus: (requestFocus) =>
+                _onChildRequestFocus(requestFocus),
           ),
         );
         SchedulerBinding.instance.addPostFrameCallback((_) {

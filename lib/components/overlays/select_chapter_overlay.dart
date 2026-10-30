@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 
 import 'package:bili_novel_packer/colors.dart';
+import 'package:bili_novel_packer/components/clickable.dart';
 import 'package:bili_novel_packer/light_novel/base/light_novel_model.dart';
 import 'package:nocterm/nocterm.dart';
 // nocterm 尚未公开导出文字宽度工具，使用与其渲染器相同的计算方式。
@@ -43,8 +44,8 @@ class _SelectChapterOverlayState extends State<SelectChapterOverlay> {
     var width = 4;
     for (final volume in volumes) {
       for (final line in volume.volumeName.split('\n')) {
-        // 三格选择标记 + 一格间距 + 滚动条 + 一格间距
-        width = math.max(width, 4 + 2 + UnicodeWidth.stringWidth(line));
+        // 三格选择标记 + 一格间距 + 滚动条1 + 三格间距
+        width = math.max(width, 3 + 1 + 1 + 2 + UnicodeWidth.stringWidth(line));
       }
     }
     return width.toDouble();
@@ -52,6 +53,7 @@ class _SelectChapterOverlayState extends State<SelectChapterOverlay> {
 
   Component _buildHelpText() {
     return Row(
+      mainAxisSize: .min,
       children: [
         Text(
           "↑/↓: ",
@@ -62,39 +64,57 @@ class _SelectChapterOverlayState extends State<SelectChapterOverlay> {
           "←/→: ",
           style: TextStyle(color: mutedColor),
         ),
-        Text("翻页"),
+        Text("翻页  "),
         Text(
           "Space: ",
           style: TextStyle(color: mutedColor),
         ),
-        Text("选择"),
+        Text("选择  "),
         // 全选
-        GestureDetector(
-          onTap: _toggleAll,
-          child: Row(
+        Clickable(
+          onClick: _toggleAll,
+          builder: (hover) => Row(
             children: [
-              Text("A: ", style: TextStyle(color: mutedColor)),
-              Text("全选"),
+              Text(
+                "A: ",
+                style: TextStyle(color: hover ? primaryColor : mutedColor),
+              ),
+              Text(
+                "全选  ",
+                style: TextStyle(color: hover ? primaryColor : null),
+              ),
             ],
           ),
         ),
         // 确认
-        GestureDetector(
-          onTap: _confirm,
-          child: Row(
+        Clickable(
+          onClick: _confirm,
+          builder: (hover) => Row(
             children: [
-              Text("Enter:", style: TextStyle(color: mutedColor)),
-              Text("确认  "),
+              Text(
+                "Enter: ",
+                style: TextStyle(color: hover ? primaryColor : mutedColor),
+              ),
+              Text(
+                "确认  ",
+                style: TextStyle(color: hover ? primaryColor : null),
+              ),
             ],
           ),
         ),
         // 取消
-        GestureDetector(
-          onTap: _cancel,
-          child: Row(
+        Clickable(
+          onClick: _cancel,
+          builder: (hover) => Row(
             children: [
-              Text("Esc: ", style: TextStyle(color: mutedColor)),
-              Text("取消"),
+              Text(
+                "Esc: ",
+                style: TextStyle(color: hover ? primaryColor : mutedColor),
+              ),
+              Text(
+                "取消",
+                style: TextStyle(color: hover ? primaryColor : null),
+              ),
             ],
           ),
         ),
@@ -299,7 +319,7 @@ class _SelectChapterOverlayState extends State<SelectChapterOverlay> {
     if (selected && hover) {
       indicator = Text("[+]", style: TextStyle(color: primaryColor));
     } else if (hover) {
-      indicator = Text("[•]", style: TextStyle(color: primaryColor));
+      indicator = Text("[ ]", style: TextStyle(color: primaryColor));
     } else if (selected) {
       indicator = Text("[+]", style: TextStyle(color: successColor));
     } else {
