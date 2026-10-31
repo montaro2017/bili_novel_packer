@@ -10,7 +10,7 @@ import 'package:bili_novel_packer/novel_packer.dart';
 import 'package:bili_novel_packer/pack_option.dart';
 
 const String gitUrl = "https://github.com/Montaro2017/bili_novel_packer";
-const String version = "0.2.49";
+const String version = "0.2.50";
 
 List<LightNovelSource> sources = [
   BiliNovelSource(),
