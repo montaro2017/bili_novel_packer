@@ -9,6 +9,7 @@ import 'package:bili_novel_packer/interceptor/retry_interceptor.dart';
 import 'package:bili_novel_packer/light_novel/base/light_novel_model.dart';
 import 'package:bili_novel_packer/light_novel/base/light_novel_source.dart';
 import 'package:bili_novel_packer/light_novel/bili_novel/bili_novel_chapterlog.dart';
+import 'package:bili_novel_packer/light_novel/bili_novel/bili_novel_redirect_interceptor.dart';
 import 'package:bili_novel_packer/light_novel/bili_novel/bili_novel_restore.dart';
 import 'package:bili_novel_packer/logger.dart';
 import 'package:bili_novel_packer/util/html_util.dart';
@@ -20,7 +21,7 @@ class BiliNovelSource implements LightNovelSource {
   static final RegExp _exp = RegExp(
     "(?:https?://[^/]*?(?:linovelib\\.com|bilinovel\\.(?:com|net)))/(?:novel|download)/(\\d+)",
   );
-  static final String domain = "https://www.bilinovel.com";
+  static String baseUrl = "https://www.bilinovel.net";
 
   static final String userAgent =
       "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36";
@@ -39,7 +40,6 @@ class BiliNovelSource implements LightNovelSource {
   late final Dio _imageDio;
   late final BiliChapterLogResolver _chapterLogResolver =
       BiliChapterLogResolver(
-        domain: domain,
         loadScript: (src) {
           return _dio.get(src).then((res) {
             return res.data.toString();
@@ -48,19 +48,24 @@ class BiliNovelSource implements LightNovelSource {
       );
 
   BiliNovelSource() {
-    var options = _createBaseOptions();
+    var options = _createBaseOptions(baseUrl);
     _dio = _createTextDio(options);
     _imageDio = _createImageDio(options);
   }
 
-  BaseOptions _createBaseOptions() {
+  void _updateBaseUrl(String newBaseUrl) {
+    _dio.options.baseUrl = newBaseUrl;
+  }
+
+  BaseOptions _createBaseOptions(String baseUrl) {
+    baseUrl = baseUrl.startsWith("http") ? baseUrl : "https://$baseUrl";
     return BaseOptions(
-      baseUrl: domain,
+      baseUrl: baseUrl,
       headers: {
         "Accept": "*/*",
         "Accept-Language": "zh-CN,zh;q=0.9",
         "Cookie": "night=0",
-        "Referer": domain,
+        "Referer": baseUrl,
         "User-Agent": userAgent,
       },
       responseType: ResponseType.plain,
@@ -74,6 +79,13 @@ class BiliNovelSource implements LightNovelSource {
   Dio _createTextDio(BaseOptions options) {
     var dio = Dio(options);
     dio.interceptors.add(RateLimitInterceptor(15, Duration(minutes: 1)));
+    dio.interceptors.add(
+      BiliNovelRedirectInterceptor((redirectDomain) {
+       var newBaseUrl = redirectDomain.startsWith("http")? redirectDomain : "https://$redirectDomain";
+       baseUrl = newBaseUrl;
+        _updateBaseUrl(newBaseUrl);
+      }),
+    );
     dio.interceptors.add(
       RetryInterceptor(dio: dio, delay: Duration(seconds: 3)),
     );
@@ -101,7 +113,7 @@ class BiliNovelSource implements LightNovelSource {
   @override
   Future<Novel> getNovel(String url) async {
     String id = _getId(url);
-    String actualUrl = "$domain/novel/$id.html";
+    String actualUrl = "$baseUrl/novel/$id.html";
     String html = (await _dio.get(actualUrl)).toString();
     try {
       return _parseNovel(actualUrl, id, parse(html));
@@ -148,7 +160,7 @@ class BiliNovelSource implements LightNovelSource {
   /// 获取小说目录
   @override
   Future<Catalog> getNovelCatalog(Novel novel) async {
-    String url = "$domain/novel/${novel.id}/catalog";
+    String url = "/novel/${novel.id}/catalog";
     String html = (await _dio.get(url)).toString();
     var doc = parse(html);
     var catalog = Catalog(novel);
@@ -236,7 +248,7 @@ class BiliNovelSource implements LightNovelSource {
     if (href == null || href.contains("javascript")) {
       return null;
     }
-    return "$domain$href";
+    return "$baseUrl$href";
   }
 
   @override
@@ -411,17 +423,17 @@ class BiliNovelSource implements LightNovelSource {
 
     if (prev != null && prevUrl != null) {
       if (_isPageLink(prev, _previousPageTexts)) {
-        prevPage = domain + prevUrl;
+        prevPage = baseUrl + prevUrl;
       } else if (!_isCatalog(prev)) {
-        prevChapter = domain + prevUrl;
+        prevChapter = baseUrl + prevUrl;
       }
     }
 
     if (next != null && nextUrl != null) {
       if (_isPageLink(next, _nextPageTexts)) {
-        nextPage = domain + nextUrl;
+        nextPage = baseUrl + nextUrl;
       } else if (!_isCatalog(next)) {
-        nextChapter = domain + nextUrl;
+        nextChapter = baseUrl + nextUrl;
       }
     }
     if (nextPage == null && nextChapter == null) {
@@ -463,7 +475,10 @@ class BiliNovelSource implements LightNovelSource {
   }
 
   Future<void> _restoreChapterContent(Document doc, Element content) async {
-    Map<String, int>? params = await _chapterLogResolver.getShuffleParams(doc);
+    Map<String, int>? params = await _chapterLogResolver.getShuffleParams(
+      baseUrl,
+      doc,
+    );
     if (params != null) {
       BiliNovelRestore.restore(content, params);
     }
@@ -482,7 +497,7 @@ class BiliNovelSource implements LightNovelSource {
         src = "https:$src";
       }
       if (!src.startsWith("http")) {
-        src = "$domain/$src";
+        src = "$baseUrl/$src";
       }
       src = src.replaceFirst("https://https://", "https://");
       src = src.replaceAll("\ud835\ude23", "b");

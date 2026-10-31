@@ -4,18 +4,16 @@ import 'package:synchronized/synchronized.dart';
 typedef BiliChapterLogLoader = Future<String> Function(String url);
 
 class BiliChapterLogResolver {
-  final String domain;
   final BiliChapterLogLoader loadScript;
 
   final Lock _lock = Lock();
   final Map<String, BiliChapterLogTemplate> _templateCache = {};
 
   BiliChapterLogResolver({
-    required this.domain,
     required this.loadScript,
   });
 
-  Future<Map<String, int>?> getShuffleParams(Document doc) async {
+  Future<Map<String, int>?> getShuffleParams(String domain, Document doc) async {
     var script = doc.querySelectorAll("script").where((s) {
       String? src = s.attributes["src"];
       Uri? uri = src == null ? null : Uri.tryParse(src);
