@@ -72,10 +72,17 @@ class _PackSettingsOverlayState extends State<PackSettingsOverlay> {
     for (var i = 0; i < items.length; i++) {
       var item = items[i];
       selectors.add(
-        _PackSettingsItemSelector(
-          item: item,
-          focused: i == focusedIndex,
-          nameWidth: _nameWidth,
+        MouseRegion(
+          onEnter: (_) {
+            setState(() {
+              focusedIndex = i;
+            });
+          },
+          child: _PackSettingsItemSelector(
+            item: item,
+            focused: i == focusedIndex,
+            nameWidth: _nameWidth,
+          ),
         ),
       );
     }
@@ -96,9 +103,27 @@ class _PackSettingsOverlayState extends State<PackSettingsOverlay> {
               crossAxisAlignment: .start,
               children: selectors,
             ),
+            SizedBox(height: 1),
+            _buildHelpText(),
           ],
         ),
       ),
+    );
+  }
+
+  Component _buildHelpText() {
+    return Row(
+      mainAxisSize: .min,
+      children: [
+        Text("↑↓←→: ", style: TextStyle(color: mutedColor)),
+        Text("导航  "),
+        Text("Space: ", style: TextStyle(color: mutedColor)),
+        Text("选中  "),
+        Text("Enter: ", style: TextStyle(color: mutedColor)),
+        Text("确认  "),
+        Text("Esc: ", style: TextStyle(color: mutedColor)),
+        Text("取消"),
+      ],
     );
   }
 
