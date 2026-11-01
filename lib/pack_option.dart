@@ -1,16 +1,18 @@
 import 'package:bili_novel_packer/light_novel/base/light_novel_model.dart';
 
-class PackOption {
-  // 是否添加章节标题
-  late bool addChapterTitle;
-
+class PackSettings {
   // 选择要打包的分卷
-  late List<Volume> selectedVolumes;
+  final List<Volume> selectedVolumes;
 
-  PackOption();
+  // 添加标题
+  final bool addChapterTitle;
 
-  PackOption.all({
-    required this.addChapterTitle,
+  // 分卷合并
+  final bool combineVolume;
+
+  PackSettings({
+    this.addChapterTitle = false,
+    this.combineVolume = false,
     required this.selectedVolumes,
   });
 
@@ -18,4 +20,10 @@ class PackOption {
   String toString() {
     return 'addChapterTitle = $addChapterTitle, selectedVolumes = $selectedVolumes';
   }
+}
+
+enum ChineseConvert {
+  none,
+  t2s,
+  s2t,
 }

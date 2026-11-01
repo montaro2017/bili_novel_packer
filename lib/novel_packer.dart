@@ -24,7 +24,7 @@ class NovelPacker {
   Future<void> packVolume({
     required LightNovelSource source,
     required Volume volume,
-    required PackOption option,
+    required PackSettings option,
   }) async {
     console.writeLine("开始打包 ${volume.volumeName}...");
     logger.i("开始打包 ${volume.volumeName}");
@@ -101,7 +101,7 @@ class NovelPacker {
   Future<void> packCombine({
     required LightNovelSource source,
     required Novel novel,
-    required PackOption option,
+    required PackSettings option,
   }) async {
     EpubPacker packer = EpubPacker(_getEpubCombineName(novel));
     _fillEpubCombine(packer, novel);

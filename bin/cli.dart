@@ -1,6 +1,7 @@
 import 'package:bili_novel_packer/console/console.dart';
 import 'package:bili_novel_packer/console/prompt.dart';
 import 'package:bili_novel_packer/console/selector.dart';
+import 'package:bili_novel_packer/const.dart';
 import 'package:bili_novel_packer/light_novel/base/light_novel_model.dart';
 import 'package:bili_novel_packer/light_novel/base/light_novel_source.dart';
 import 'package:bili_novel_packer/light_novel/bili_novel/bili_novel_source.dart';
@@ -8,9 +9,6 @@ import 'package:bili_novel_packer/light_novel/wenku_novel/wenku_novel_source.dar
 import 'package:bili_novel_packer/logger.dart';
 import 'package:bili_novel_packer/novel_packer.dart';
 import 'package:bili_novel_packer/pack_option.dart';
-
-const String gitUrl = "https://github.com/Montaro2017/bili_novel_packer";
-const String version = "0.2.50";
 
 List<LightNovelSource> sources = [
   BiliNovelSource(),
@@ -59,12 +57,12 @@ Future<void> runOne(String url, LightNovelSource source, bool manual) async {
   logger.i(novel);
   printNovelDetail(novel);
   var catalog = await source.getNovelCatalog(novel);
-  PackOption option;
+  PackSettings option;
   bool combineVolume;
   if (manual) {
     (option, combineVolume) = readPackOption(catalog);
   } else {
-    option = PackOption.all(
+    option = PackSettings(
       addChapterTitle: false,
       selectedVolumes: catalog.volumes,
     );
@@ -137,16 +135,15 @@ void printNovelDetail(Novel novel) {
   console.writeLine();
 }
 
-(PackOption, bool) readPackOption(Catalog catalog) {
-  var option = PackOption();
+(PackSettings, bool) readPackOption(Catalog catalog) {
   var combineVolume = false;
-  option.selectedVolumes = Selector(
+  var selectedVolumes = Selector(
     options: catalog.volumes,
     message: "请选择要下载的分卷: ",
     suffix: "选择全部\n",
   ).selectMany();
 
-  if (option.selectedVolumes.length > 1) {
+  if (selectedVolumes.length > 1) {
     console.writeLine();
     combineVolume = Prompt(
       "是否合并选择的分卷为一个文件? ",
@@ -155,18 +152,24 @@ void printNovelDetail(Novel novel) {
   }
 
   console.writeLine();
-  option.addChapterTitle = Prompt(
+
+  var addChapterTitle = Prompt(
     "是否在每章开头添加章节标题? ",
     defaultValue: false,
   ).prompt();
   console.writeLine();
+  var option = PackSettings(
+    selectedVolumes: selectedVolumes,
+    addChapterTitle: addChapterTitle,
+    combineVolume: combineVolume,
+  );
   return (option, combineVolume);
 }
 
 Future<void> pack({
   required LightNovelSource source,
   required Novel novel,
-  required PackOption option,
+  required PackSettings option,
   required bool combineVolume,
 }) async {
   if (combineVolume && option.selectedVolumes.length <= 1) {
