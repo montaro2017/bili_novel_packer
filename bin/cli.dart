@@ -8,7 +8,7 @@ import 'package:bili_novel_packer/light_novel/bili_novel/bili_novel_source.dart'
 import 'package:bili_novel_packer/light_novel/wenku_novel/wenku_novel_source.dart';
 import 'package:bili_novel_packer/logger.dart';
 import 'package:bili_novel_packer/novel_packer.dart';
-import 'package:bili_novel_packer/pack_option.dart';
+import 'package:bili_novel_packer/pack_settings.dart';
 
 List<LightNovelSource> sources = [
   BiliNovelSource(),
@@ -57,23 +57,23 @@ Future<void> runOne(String url, LightNovelSource source, bool manual) async {
   logger.i(novel);
   printNovelDetail(novel);
   var catalog = await source.getNovelCatalog(novel);
-  PackSettings option;
-  bool combineVolume;
+  List<Volume> volumes;
+  PackSettings settings;
   if (manual) {
-    (option, combineVolume) = readPackOption(catalog);
+    (volumes, settings) = readPackOption(catalog);
   } else {
-    option = PackSettings(
-      addChapterTitle: false,
-      selectedVolumes: catalog.volumes,
+    volumes = catalog.volumes;
+    settings = PackSettings(
+      addTitle: false,
+      combineVolume: false,
     );
-    combineVolume = false;
   }
-  logger.i("option: $option, combineVolume: $combineVolume");
+  logger.i("settings: $settings");
   await pack(
     source: source,
     novel: novel,
-    option: option,
-    combineVolume: combineVolume,
+    volumes: volumes,
+    settings: settings,
   );
 }
 
@@ -135,7 +135,7 @@ void printNovelDetail(Novel novel) {
   console.writeLine();
 }
 
-(PackSettings, bool) readPackOption(Catalog catalog) {
+(List<Volume>, PackSettings) readPackOption(Catalog catalog) {
   var combineVolume = false;
   var selectedVolumes = Selector(
     options: catalog.volumes,
@@ -158,29 +158,30 @@ void printNovelDetail(Novel novel) {
     defaultValue: false,
   ).prompt();
   console.writeLine();
-  var option = PackSettings(
-    selectedVolumes: selectedVolumes,
-    addChapterTitle: addChapterTitle,
+  var settings = PackSettings(
+    addTitle: addChapterTitle,
     combineVolume: combineVolume,
   );
-  return (option, combineVolume);
+  return (selectedVolumes, settings);
 }
 
 Future<void> pack({
   required LightNovelSource source,
   required Novel novel,
-  required PackSettings option,
-  required bool combineVolume,
+  required List<Volume> volumes,
+  required PackSettings settings,
 }) async {
-  if (combineVolume && option.selectedVolumes.length <= 1) {
-    combineVolume = false;
-  }
   var packer = NovelPacker(source);
-  if (combineVolume) {
-    await packer.packCombine(source: source, novel: novel, option: option);
+  if (settings.combineVolume) {
+    await packer.packCombine(
+      source: source,
+      novel: novel,
+      volumes: volumes,
+      option: settings,
+    );
   } else {
-    for (var volume in option.selectedVolumes) {
-      await packer.packVolume(source: source, volume: volume, option: option);
+    for (var volume in volumes) {
+      await packer.packVolume(source: source, volume: volume, option: settings);
     }
   }
 }

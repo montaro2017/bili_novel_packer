@@ -1,12 +1,8 @@
-import 'dart:math' as math;
-
-import 'package:bili_novel_packer/colors.dart';
 import 'package:bili_novel_packer/components/clickable.dart';
+import 'package:bili_novel_packer/components/marquee.dart';
+import 'package:bili_novel_packer/components/wrap.dart';
 import 'package:bili_novel_packer/light_novel/base/light_novel_model.dart';
 import 'package:nocterm/nocterm.dart';
-// nocterm 尚未公开导出文字宽度工具，使用与其渲染器相同的计算方式。
-// ignore: implementation_imports
-import 'package:nocterm/src/utils/unicode_width.dart';
 
 class SelectChapterOverlay extends StatefulComponent {
   const SelectChapterOverlay({
@@ -40,85 +36,50 @@ class _SelectChapterOverlayState extends State<SelectChapterOverlay> {
     return selectedVolumes;
   }
 
-  double get _listWidth {
-    var width = 4;
-    for (final volume in volumes) {
-      for (final line in volume.volumeName.split('\n')) {
-        // 三格选择标记 + 一格间距 + 滚动条1 + 三格间距
-        width = math.max(width, 3 + 1 + 1 + 2 + UnicodeWidth.stringWidth(line));
-      }
-    }
-    return width.toDouble();
+  Component _buildHelpText(
+    BuildContext context,
+  ) {
+    return Wrap(
+      alignment: .center,
+      spacing: 2,
+      crossAxisAlignment: .center,
+      children: [
+        _helpHint("↑/↓: ", "导航"),
+        _helpHint("←/→: ", "翻页"),
+        _helpHint("Space: ", "选择"),
+        _helpAction("A: ", "全选", _toggleAll),
+        _helpAction("Enter: ", "确认", _confirm),
+        _helpAction("Esc: ", "取消", _cancel),
+      ],
+    );
   }
 
-  Component _buildHelpText() {
+  Component _helpHint(String key, String desc) {
+    var theme = TuiTheme.of(context);
     return Row(
       mainAxisSize: .min,
       children: [
-        Text(
-          "↑/↓: ",
-          style: TextStyle(color: mutedColor),
-        ),
-        Text("导航  "),
-        Text(
-          "←/→: ",
-          style: TextStyle(color: mutedColor),
-        ),
-        Text("翻页  "),
-        Text(
-          "Space: ",
-          style: TextStyle(color: mutedColor),
-        ),
-        Text("选择  "),
-        // 全选
-        Clickable(
-          onClick: _toggleAll,
-          builder: (hover) => Row(
-            children: [
-              Text(
-                "A: ",
-                style: TextStyle(color: hover ? primaryColor : mutedColor),
-              ),
-              Text(
-                "全选  ",
-                style: TextStyle(color: hover ? primaryColor : null),
-              ),
-            ],
-          ),
-        ),
-        // 确认
-        Clickable(
-          onClick: _confirm,
-          builder: (hover) => Row(
-            children: [
-              Text(
-                "Enter: ",
-                style: TextStyle(color: hover ? primaryColor : mutedColor),
-              ),
-              Text(
-                "确认  ",
-                style: TextStyle(color: hover ? primaryColor : null),
-              ),
-            ],
-          ),
-        ),
-        // 取消
-        Clickable(
-          onClick: _cancel,
-          builder: (hover) => Row(
-            children: [
-              Text(
-                "Esc: ",
-                style: TextStyle(color: hover ? primaryColor : mutedColor),
-              ),
-              Text(
-                "取消",
-                style: TextStyle(color: hover ? primaryColor : null),
-              ),
-            ],
-          ),
-        ),
+        Text(key, style: TextStyle(color: theme.outlineVariant)),
+        Text(desc),
       ],
+    );
+  }
+
+  Component _helpAction(
+    String key,
+    String desc,
+    void Function() onClick,
+  ) {
+    var theme = TuiTheme.of(context);
+    return Clickable(
+      onClick: onClick,
+      builder: (hover) => Row(
+        mainAxisSize: .min,
+        children: [
+          Text(key, style: TextStyle(color: hover ? null : theme.outlineVariant)),
+          Text(desc),
+        ],
+      ),
     );
   }
 
@@ -150,35 +111,39 @@ class _SelectChapterOverlayState extends State<SelectChapterOverlay> {
           children: [
             Text("选择分卷", style: TextStyle()),
             SizedBox(height: 1),
-            // 分卷列表
-            Expanded(
-              child: Align(
-                alignment: Alignment.topCenter,
-                child: SizedBox(
-                  width: _listWidth,
-                  child: Scrollbar(
-                    controller: scrollController,
-                    thumbVisibility: true,
-                    child: ListView.builder(
-                      controller: scrollController,
-                      itemExtent: 1,
-                      itemCount: volumes.length,
-                      itemBuilder: (context, index) {
-                        return _buildItem(
-                          volumes[index],
-                          index,
-                          hoverIndex == index,
-                          selectedMap[index] ?? false,
-                        );
-                      },
-                    ),
-                  ),
-                ),
-              ),
-            ),
+            _buildVolumeList(),
             SizedBox(height: 1),
-            _buildHelpText(),
+            _buildHelpText(context),
           ],
+        ),
+      ),
+    );
+  }
+
+  Component _buildVolumeList() {
+    return Expanded(
+      child: Scrollbar(
+        controller: scrollController,
+        thumbVisibility: true,
+        child: SingleChildScrollView(
+          controller: scrollController,
+          keyboardScrollable: true,
+          padding: EdgeInsets.only(right: 2),
+          child: ConstrainedBox(
+            constraints: BoxConstraints(maxWidth: 75),
+            child: Column(
+              crossAxisAlignment: .start,
+              children: [
+                for (var i = 0; i < volumes.length; i++)
+                  _buildItem(
+                    volumes[i],
+                    i,
+                    hoverIndex == i,
+                    selectedMap[i] ?? false,
+                  ),
+              ],
+            ),
+          ),
         ),
       ),
     );
@@ -234,7 +199,10 @@ class _SelectChapterOverlayState extends State<SelectChapterOverlay> {
       index = 0;
     }
     setState(() {
-      scrollController.ensureIndexVisible(index: index);
+      scrollController.ensureVisible(
+        itemOffset: index.toDouble(),
+        itemExtent: 1.0,
+      );
       hoverIndex = index;
     });
   }
@@ -265,7 +233,10 @@ class _SelectChapterOverlayState extends State<SelectChapterOverlay> {
       index = volumes.length - 1;
     }
     setState(() {
-      scrollController.ensureIndexVisible(index: index);
+      scrollController.ensureVisible(
+        itemOffset: index.toDouble(),
+        itemExtent: 1.0,
+      );
       hoverIndex = index;
     });
   }
@@ -303,16 +274,22 @@ class _SelectChapterOverlayState extends State<SelectChapterOverlay> {
     component.onCancel?.call();
   }
 
-  Component _buildItem(Volume volume, int index, bool hover, bool selected) {
+  Component _buildItem(
+    Volume volume,
+    int index,
+    bool hover,
+    bool selected,
+  ) {
+    var theme = TuiTheme.of(context);
     Component indicator;
     if (selected && hover) {
-      indicator = Text("[+]", style: TextStyle(color: primaryColor));
+      indicator = Text("[+]", style: TextStyle(color: theme.primary));
     } else if (hover) {
-      indicator = Text("[ ]", style: TextStyle(color: primaryColor));
+      indicator = Text("[ ]", style: TextStyle(color: theme.primary));
     } else if (selected) {
-      indicator = Text("[+]", style: TextStyle(color: successColor));
+      indicator = Text("[+]", style: TextStyle(color: theme.success));
     } else {
-      indicator = Text("[ ]", style: TextStyle(color: mutedColor));
+      indicator = Text("[ ]", style: TextStyle(color: theme.outlineVariant));
     }
     return MouseRegion(
       onEnter: (_) {
@@ -327,15 +304,18 @@ class _SelectChapterOverlayState extends State<SelectChapterOverlay> {
           });
         },
         child: Row(
+          mainAxisSize: .min,
           children: [
             indicator,
             SizedBox(width: 1),
-            Expanded(
-              child: Text(
-                volume.volumeName,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(color: hover ? null : mutedColor),
+            Flexible(
+              child: Marquee(
+                marquee: hover,
+                child: Text(
+                  volume.volumeName,
+                  maxLines: 1,
+                  style: TextStyle(color: hover ? null : theme.outlineVariant),
+                ),
               ),
             ),
           ],
@@ -343,16 +323,4 @@ class _SelectChapterOverlayState extends State<SelectChapterOverlay> {
       ),
     );
   }
-}
-
-class PackSettings {
-  const PackSettings({
-    required this.volumes,
-    this.combineVolume = false,
-    this.addChapterTitle = false,
-  });
-
-  final List<Volume> volumes;
-  final bool combineVolume;
-  final bool addChapterTitle;
 }

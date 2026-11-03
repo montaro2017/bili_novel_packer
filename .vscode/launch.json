@@ -1,0 +1,31 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "CLI",
+      "type": "dart",
+      "request": "launch",
+      "program": "bin/cli.dart",
+      "cwd": "${workspaceFolder}",
+      "console": "terminal",
+      "args": []
+    },
+    {
+      "name": "TUI",
+      "type": "dart",
+      "request": "launch",
+      "program": "bin/tui.dart",
+      "cwd": "${workspaceFolder}",
+      "console": "externalTerminal",
+      "args": []
+    },
+    {
+      "name": "当前文件",
+      "type": "dart",
+      "request": "launch",
+      "program": "${file}",
+      "cwd": "${workspaceFolder}",
+      "console": "terminal"
+    }
+  ]
+}

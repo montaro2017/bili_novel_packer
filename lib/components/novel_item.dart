@@ -1,10 +1,10 @@
-import 'package:bili_novel_packer/colors.dart';
 import 'package:bili_novel_packer/components/overlays/pack_settings_overlay.dart';
 import 'package:bili_novel_packer/components/overlays/select_chapter_overlay.dart';
 import 'package:bili_novel_packer/components/packer_app.dart';
 import 'package:bili_novel_packer/components/spinner.dart';
 import 'package:bili_novel_packer/light_novel/base/light_novel_model.dart';
 import 'package:bili_novel_packer/light_novel/base/light_novel_source.dart';
+import 'package:bili_novel_packer/pack_settings.dart';
 import 'package:nocterm/nocterm.dart';
 
 class NovelItem extends StatefulComponent {
@@ -39,12 +39,11 @@ class _NovelItemState extends State<NovelItem> {
 
   Novel? novel;
   Catalog? catalog;
-  PackSettings? packSettings;
 
   String? statusLine;
   dynamic err;
 
-  OverlayEntry? _overlayEntry;
+  final List<OverlayEntry> _overlays = [];
 
   String get url => component.link.url;
 
@@ -58,6 +57,15 @@ class _NovelItemState extends State<NovelItem> {
     }
     _status = s;
     component.onStatusChanged?.call(s);
+  }
+
+  @override
+  void dispose() {
+    for (final e in _overlays.reversed) {
+      e.remove();
+    }
+    _overlays.clear();
+    super.dispose();
   }
 
   @override
@@ -76,12 +84,6 @@ class _NovelItemState extends State<NovelItem> {
   }
 
   @override
-  void dispose() {
-    super.dispose();
-    _hideOverlay();
-  }
-
-  @override
   Component build(BuildContext context) {
     return Column(
       crossAxisAlignment: .start,
@@ -94,11 +96,12 @@ class _NovelItemState extends State<NovelItem> {
   }
 
   Component _titleLine() {
+    var theme = TuiTheme.of(context);
     Component indicator = switch (status) {
-      .idle => Text("•", style: TextStyle(color: mutedColor)),
-      .working => Spinner(color: primaryColor),
-      .complted => Text("•", style: TextStyle(color: successColor)),
-      .error => Text("•", style: TextStyle(color: destructiveColor)),
+      .idle => Text("•", style: TextStyle(color: theme.outlineVariant)),
+      .working => Spinner(color: theme.primary),
+      .complted => Text("•", style: TextStyle(color: theme.success)),
+      .error => Text("•", style: TextStyle(color: theme.error)),
     };
     return Row(
       crossAxisAlignment: .start,
@@ -113,7 +116,7 @@ class _NovelItemState extends State<NovelItem> {
                       TextSpan(text: novel!.title),
                       TextSpan(
                         text: "(${component.link.url})",
-                        style: TextStyle(color: mutedColor),
+                        style: TextStyle(color: theme.outlineVariant),
                       ),
                     ],
                   ),
@@ -141,6 +144,8 @@ class _NovelItemState extends State<NovelItem> {
   }
 
   Component? _errLine() {
+    var theme = TuiTheme.of(context);
+
     if (err == null) {
       return null;
     }
@@ -152,7 +157,7 @@ class _NovelItemState extends State<NovelItem> {
           Text(
             "└ ",
             style: TextStyle(
-              color: destructiveColor,
+              color: theme.error,
             ),
           ),
           Flexible(
@@ -160,7 +165,7 @@ class _NovelItemState extends State<NovelItem> {
               child: Text(
                 err.toString(),
                 style: TextStyle(
-                  color: destructiveColor,
+                  color: theme.error,
                 ),
               ),
             ),
@@ -170,55 +175,82 @@ class _NovelItemState extends State<NovelItem> {
     );
   }
 
+  void _openOverlay(OverlayEntry overlay) {
+    if (_overlays.isEmpty) {
+      component.onRequestFocus?.call(true);
+      _hideCursor();
+    }
+    _overlays.add(overlay);
+    Overlay.of(context).insert(overlay);
+  }
+
+  void _closeOverlay(OverlayEntry overlay) {
+    if (!_overlays.remove(overlay)) return;
+    overlay.remove();
+    if (_overlays.isEmpty) {
+      component.onRequestFocus?.call(false);
+      _showCursor();
+    }
+  }
+
+  void _popOverlay() {
+    if (_overlays.isEmpty) return;
+    _closeOverlay(_overlays.last);
+  }
+
+  void _closeAllOverlays() {
+    while (_overlays.isNotEmpty) {
+      _popOverlay();
+    }
+  }
+
   void _showSelectChapterOverlay() {
     statusLine = "选择分卷...";
-    _hideOverlay();
-    _hideCursor();
-    _overlayEntry = OverlayEntry(
-      opaque: true,
-      builder: (context) {
-        return SelectChapterOverlay(
-          catalog: catalog!,
-          onCancel: () {
-            _hideOverlay();
-            setState(() {
-              status = .error;
-              err = "操作已取消";
-            });
-          },
-          onConfirm: (selectedVolumes) {
-            _showPackSettingsOverlay(selectedVolumes);
-          },
-        );
-      },
+    _openOverlay(
+      OverlayEntry(
+        opaque: true,
+        maintainState: true,
+        builder: (context) {
+          return SelectChapterOverlay(
+            catalog: catalog!,
+            onCancel: () {
+              _popOverlay();
+              setState(() {
+                status = .error;
+                err = "操作已取消";
+              });
+            },
+            onConfirm: (selectedVolumes) {
+              _showPackSettingsOverlay(selectedVolumes);
+            },
+          );
+        },
+      ),
     );
-    component.onRequestFocus?.call(true);
-    Overlay.of(context).insert(_overlayEntry!);
   }
 
   void _showPackSettingsOverlay(List<Volume> selectedVolumes) {
-    _hideOverlay();
-    _hideCursor();
-    _overlayEntry = OverlayEntry(
-      opaque: true,
-      builder: (context) {
-        return PackSettingsOverlay();
-      },
+    _openOverlay(
+      OverlayEntry(
+        opaque: true,
+        maintainState: true,
+        builder: (context) {
+          return PackSettingsOverlay(
+            onCancel: () {
+              _popOverlay();
+            },
+            onConfirm: (settings) {
+              _closeAllOverlays();
+              _doPack(selectedVolumes, settings);
+            },
+          );
+        },
+      ),
     );
-    component.onRequestFocus?.call(true);
-    Overlay.of(context).insert(_overlayEntry!);
-  }
-
-  void _hideOverlay() {
-    _overlayEntry?.remove();
-    _overlayEntry = null;
-    component.onRequestFocus?.call(false);
-    _showCursor();
   }
 
   void _hideCursor() {
     SchedulerBinding.instance.addPostFrameCallback((_) {
-      if (!mounted || _overlayEntry == null) return;
       final terminal = TerminalBinding.instance.terminal;
       terminal.hideCursor();
       terminal.flush();
@@ -227,7 +259,6 @@ class _NovelItemState extends State<NovelItem> {
 
   void _showCursor() {
     SchedulerBinding.instance.addPostFrameCallback((_) {
-      if (!mounted || _overlayEntry == null) return;
       final terminal = TerminalBinding.instance.terminal;
       terminal.showCursor();
     });
@@ -260,16 +291,9 @@ class _NovelItemState extends State<NovelItem> {
     if (mode == .manual) {
       _showSelectChapterOverlay();
     } else {
-      packSettings = _defaultSettings();
-      await _doPack();
+      await _doPack([], PackSettings());
     }
   }
 
-  Future<void> _doPack() async {}
-
-  PackSettings _defaultSettings() {
-    return PackSettings(
-      volumes: catalog!.volumes,
-    );
-  }
+  Future<void> _doPack(List<Volume> volumes, PackSettings settings) async {}
 }

@@ -10,7 +10,7 @@ import 'package:bili_novel_packer/light_novel/base/light_novel_cover_detector.da
 import 'package:bili_novel_packer/light_novel/base/light_novel_model.dart';
 import 'package:bili_novel_packer/light_novel/base/light_novel_source.dart';
 import 'package:bili_novel_packer/logger.dart';
-import 'package:bili_novel_packer/pack_option.dart';
+import 'package:bili_novel_packer/pack_settings.dart';
 import 'package:bili_novel_packer/util/html_util.dart';
 import 'package:bili_novel_packer/util/sequence.dart';
 import 'package:bili_novel_packer/util/volume_util.dart';
@@ -30,7 +30,7 @@ class NovelPacker {
     logger.i("开始打包 ${volume.volumeName}");
     EpubPacker packer = EpubPacker(_getEpubVolumeName(volume));
     _fillEpubVolume(packer, volume);
-    if (option.addChapterTitle) {
+    if (option.addTitle) {
       packer.addStylesheet(styleCss());
     }
     LightNovelCoverDetector detector = LightNovelCoverDetector();
@@ -42,7 +42,7 @@ class NovelPacker {
         chapter: chapter,
         packer: packer,
         imageSeq: imageSeq,
-        addChapterTitle: option.addChapterTitle,
+        addChapterTitle: option.addTitle,
         detector: detector,
       );
       _addTitle(doc, chapter.chapterName);
@@ -101,6 +101,7 @@ class NovelPacker {
   Future<void> packCombine({
     required LightNovelSource source,
     required Novel novel,
+    required List<Volume> volumes,
     required PackSettings option,
   }) async {
     EpubPacker packer = EpubPacker(_getEpubCombineName(novel));
@@ -119,11 +120,11 @@ class NovelPacker {
       packer.cover = coverName;
     }
 
-    if (option.addChapterTitle) {
+    if (option.addTitle) {
       packer.addStylesheet(styleCss());
     }
 
-    for (Volume volume in option.selectedVolumes) {
+    for (Volume volume in volumes) {
       logger.i("开始处理: ${volume.volumeName}");
       console.writeLine("正在处理: ${volume.volumeName}");
       NavPoint volumeNavPoint = NavPoint(volume.volumeName);
@@ -134,7 +135,7 @@ class NovelPacker {
           chapter: chapter,
           packer: packer,
           imageSeq: imageSeq,
-          addChapterTitle: option.addChapterTitle,
+          addChapterTitle: option.addTitle,
         );
         _addTitle(doc, chapter.chapterName);
         String html = _closeTag(doc);

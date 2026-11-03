@@ -1,10 +1,7 @@
-import 'dart:math' as math;
-
-import 'package:bili_novel_packer/colors.dart';
-import 'package:bili_novel_packer/pack_option.dart';
+import 'package:bili_novel_packer/components/clickable.dart';
+import 'package:bili_novel_packer/components/wrap.dart';
+import 'package:bili_novel_packer/pack_settings.dart';
 import 'package:nocterm/nocterm.dart';
-// ignore: implementation_imports
-import 'package:nocterm/src/utils/unicode_width.dart';
 
 class PackSettingsOverlay extends StatefulComponent {
   const PackSettingsOverlay({
@@ -13,83 +10,103 @@ class PackSettingsOverlay extends StatefulComponent {
   });
 
   final void Function()? onCancel;
-  final void Function(PackSettings option)? onConfirm;
+  final void Function(PackSettings settings)? onConfirm;
 
   @override
   State<StatefulComponent> createState() => _PackSettingsOverlayState();
 }
 
-final addTitle = _PackSettingsItem<bool>(
-  name: "添加标题",
-  options: [
-    _Option("是", true),
-    _Option("否", false),
-  ],
-  defaultValue: false,
-  desc: "在每一章开头添加一个醒目的标题",
-);
-
-final combineVolume = _PackSettingsItem<bool>(
-  name: "合并分卷",
-  options: [
-    _Option("是", true),
-    _Option("否", false),
-  ],
-  defaultValue: false,
-  desc: "将所选分卷合并为一个文件，不推荐，花费时间长容易失败",
-);
-
-final chineseConvert = _PackSettingsItem<ChineseConvert>(
-  name: "繁简转换",
-  options: [
-    _Option("不转换", .none),
-    _Option("转简体", .t2s),
-    _Option("转繁体", .s2t),
-  ],
-  defaultValue: .none,
-);
-
 class _PackSettingsOverlayState extends State<PackSettingsOverlay> {
-  final List<_PackSettingsItem> items = [
-    addTitle,
-    combineVolume,
-    chineseConvert,
-  ];
-
   int focusedIndex = 0;
 
-  double get _nameWidth {
-    var width = 0;
-    for (var item in items) {
-      width = math.max(width, UnicodeWidth.stringWidth(item.name));
-    }
-    return width.toDouble();
+  // settings
+  bool addTitle = false;
+  bool combineVolume = false;
+  ChineseConvert chineseConvert = .none;
+  String? bookName;
+
+  List<_SettingsField> get fields {
+    final builders = <_SettingsField Function(int index)>[
+      (index) => _SelectorField<bool>(
+        label: "添加标题",
+        labelWidth: 8,
+        desc: "在每一章开头添加一个醒目的标题",
+        options: [
+          _Option("否", false),
+          _Option("是", true),
+        ],
+        value: addTitle,
+        focused: focusedIndex == index,
+        onRequestFocus: () {
+          setState(() => focusedIndex = index);
+          return true;
+        },
+        onValueChanged: (value) {
+          setState(() => addTitle = value);
+        },
+      ),
+      (index) => _SelectorField<bool>(
+        label: "合并分卷",
+        labelWidth: 8,
+        desc: "将所选分卷合并为一个文件，所需时间较长",
+        options: [
+          _Option("否", false),
+          _Option("是", true),
+        ],
+        value: combineVolume,
+        focused: focusedIndex == index,
+        onRequestFocus: () {
+          setState(() => focusedIndex = index);
+          return true;
+        },
+        onValueChanged: (value) => setState(() => combineVolume = value),
+      ),
+      (index) => _SelectorField<ChineseConvert>(
+        label: "繁简转换",
+        labelWidth: 8,
+        desc: "转换为简体或繁体",
+        options: [
+          _Option("不转换", .none),
+          _Option("转繁体", .s2t),
+          _Option("转简体", .t2s),
+        ],
+        value: chineseConvert,
+        focused: focusedIndex == index,
+        onRequestFocus: () {
+          setState(() => focusedIndex = index);
+          return true;
+        },
+        onValueChanged: (value) => setState(() => chineseConvert = value),
+      ),
+      (index) => _InputField(
+        label: "覆盖书名",
+        desc: "重新设定书名",
+        value: bookName,
+        focused: focusedIndex == index,
+        onRequestFocus: () {
+          setState(() => focusedIndex = index);
+          return true;
+        },
+        onValueChanged: (v) => setState(() => bookName = v),
+      ),
+    ];
+    return [
+      for (final (index, build) in builders.indexed) build(index),
+    ];
   }
+
+  List<Component> get spacedFields => [
+    for (var i = 0; i < fields.length; i++) ...[
+      if (i > 0) const SizedBox(height: 1),
+      fields[i],
+    ],
+  ];
 
   @override
   Component build(BuildContext context) {
-    List<Component> selectors = [];
-    for (var i = 0; i < items.length; i++) {
-      var item = items[i];
-      selectors.add(
-        MouseRegion(
-          onEnter: (_) {
-            setState(() {
-              focusedIndex = i;
-            });
-          },
-          child: _PackSettingsItemSelector(
-            item: item,
-            focused: i == focusedIndex,
-            nameWidth: _nameWidth,
-          ),
-        ),
-      );
-    }
-
     return Focusable(
       focused: true,
-      onKeyEvent: _onKeyEvent,
+      onKeyEvent: _keyEvent,
       child: Container(
         padding: EdgeInsets.all(1),
         constraints: BoxConstraints.expand(),
@@ -101,71 +118,120 @@ class _PackSettingsOverlayState extends State<PackSettingsOverlay> {
             SizedBox(height: 1),
             Column(
               crossAxisAlignment: .start,
-              children: selectors,
+              children: spacedFields,
             ),
             SizedBox(height: 1),
-            _buildHelpText(),
+            _buildHelpText(context),
           ],
         ),
       ),
     );
   }
 
-  Component _buildHelpText() {
-    return Row(
-      mainAxisSize: .min,
+  Component _buildHelpText(
+    BuildContext context,
+  ) {
+    return Wrap(
+      spacing: 2,
+      alignment: WrapAlignment.center,
       children: [
-        Text("↑↓←→: ", style: TextStyle(color: mutedColor)),
-        Text("导航  "),
-        Text("Space: ", style: TextStyle(color: mutedColor)),
-        Text("选中  "),
-        Text("Enter: ", style: TextStyle(color: mutedColor)),
-        Text("确认  "),
-        Text("Esc: ", style: TextStyle(color: mutedColor)),
-        Text("取消"),
+        _helpHint("↑↓←→: ", "导航"),
+        _helpHint("Space: ", "选中"),
+        _helpAction("Enter: ", "确认", _confirm),
+        _helpAction("Esc: ", "取消", _cancel),
       ],
     );
   }
 
-  bool _onKeyEvent(KeyboardEvent event) {
-    if (event.logicalKey == LogicalKey.arrowDown) {
+  Component _helpHint(String key, String desc) {
+    var theme = TuiTheme.of(context);
+    return Row(
+      mainAxisSize: .min,
+      children: [
+        Text(key, style: TextStyle(color: theme.outlineVariant)),
+        Text(desc),
+      ],
+    );
+  }
+
+  Component _helpAction(
+    String key,
+    String desc,
+    void Function() onClick,
+  ) {
+    var theme = TuiTheme.of(context);
+    return Clickable(
+      onClick: onClick,
+      builder: (hover) => Row(
+        mainAxisSize: .min,
+        children: [
+          Text(key, style: TextStyle(color: hover ? null : theme.outlineVariant)),
+          Text(desc),
+        ],
+      ),
+    );
+  }
+
+  bool _keyEvent(KeyboardEvent e) {
+    if (e.logicalKey == LogicalKey.arrowDown) {
       _focusDown();
       return true;
     }
-    if (event.logicalKey == LogicalKey.arrowUp) {
+    if (e.logicalKey == LogicalKey.arrowUp) {
       _focusUp();
+      return true;
+    }
+    if (e.logicalKey == LogicalKey.enter) {
+      _confirm();
+      return true;
+    }
+    if (e.logicalKey == LogicalKey.escape) {
+      _cancel();
       return true;
     }
     return false;
   }
 
   void _focusDown() {
-    if (focusedIndex >= items.length - 1) return;
-    setState(() {
-      focusedIndex++;
-    });
+    if (focusedIndex >= fields.length - 1) return;
+    setState(() => focusedIndex++);
   }
 
   void _focusUp() {
     if (focusedIndex <= 0) return;
-    setState(() {
-      focusedIndex--;
-    });
+    setState(() => focusedIndex--);
+  }
+
+  void _confirm() {
+    var settings = PackSettings(
+      addTitle: addTitle,
+      combineVolume: combineVolume,
+      chineseConvert: chineseConvert,
+    );
+    component.onConfirm?.call(settings);
+  }
+
+  void _cancel() {
+    component.onCancel?.call();
   }
 }
 
-class _PackSettingsItem<T> {
-  _PackSettingsItem({
-    required this.name,
-    required this.options,
-    required this.defaultValue,
+abstract class _SettingsField<T> extends StatefulComponent {
+  const _SettingsField({
+    required this.label,
     this.desc,
-  }) : assert(options.map((opt) => opt.value).toList().contains(defaultValue));
+    this.focused = false,
+    this.value,
+    this.onRequestFocus,
+    this.onValueChanged,
+  });
 
-  final String name;
-  final List<_Option<T>> options;
-  final T defaultValue;
+  final String label;
   final String? desc;
+  final bool focused;
+  final T? value;
+  final bool Function()? onRequestFocus;
+  final void Function(T value)? onValueChanged;
 }
 
 class _Option<T> {
@@ -185,84 +251,231 @@ class _Option<T> {
   }
 }
 
-class _PackSettingsItemSelector<T> extends StatefulComponent {
-  const _PackSettingsItemSelector({
-    required this.item,
-    this.defaultValue,
-    required this.focused,
-    required this.nameWidth,
+class _SelectorField<T> extends _SettingsField<T> {
+  _SelectorField({
+    required super.label,
+    required super.desc,
+    required this.options,
+    super.value,
+    super.focused,
+    super.onRequestFocus,
+    super.onValueChanged,
+    required this.labelWidth,
   });
 
-  final _PackSettingsItem<T> item;
-  final bool focused;
-  final T? defaultValue;
-  final double nameWidth;
+  final double labelWidth;
+  final List<_Option<T>> options;
 
   @override
-  State<StatefulComponent> createState() => _PackSettingsItemSelectorState<T>();
+  State<StatefulComponent> createState() => _SelectorFieldState<T>();
 }
 
-class _PackSettingsItemSelectorState<T>
-    extends State<_PackSettingsItemSelector<T>> {
-  _PackSettingsItem<T> get item => component.item;
+class _SelectorFieldState<T> extends State<_SelectorField<T>> {
+  int hoverIndex = 0;
 
-  List<_Option<T>> get options => item.options;
-
-  T? get defaultValue => component.defaultValue;
+  int get activatedIndex => selectorOptions.indexed
+      .where((e) => e.$2.value == component.value)
+      .first
+      .$1;
 
   bool get focused => component.focused;
 
+  List<_Option<T>> get selectorOptions => component.options;
+
   @override
   Component build(BuildContext context) {
-    List<Component> labels = [];
-    for (var i = 0; i < options.length; i++) {
-      var opt = options[i];
-      if (i == 0) {
-        labels.add(Text(opt.label, style: TextStyle(color: mutedColor)));
-      } else {
-        labels.add(
+    var theme = TuiTheme.of(context);
+    return Focusable(
+      focused: component.focused,
+      onKeyEvent: _keyEvent,
+      child: Column(
+        crossAxisAlignment: .start,
+        children: [
           Row(
             mainAxisSize: .min,
             children: [
+              SizedBox(
+                width: component.labelWidth,
+                child: Text(component.label),
+              ),
               SizedBox(width: 2),
-              Text(opt.label, style: TextStyle(color: mutedColor)),
+              Row(
+                mainAxisSize: .min,
+                children: _buildOptions(),
+              ),
             ],
           ),
-        );
-      }
-    }
-
-    return Column(
-      crossAxisAlignment: .start,
-      children: [
-        Row(
-          mainAxisSize: .min,
-          mainAxisAlignment: .start,
-          children: [
-            SizedBox(
-              width: 2,
-              child: focused
-                  ? Text("›", style: TextStyle(color: primaryColor))
-                  : null,
-            ),
-            SizedBox(
-              width: component.nameWidth,
-              child: Text(item.name),
-            ),
-            SizedBox(width: 2),
-            ...labels,
-          ],
-        ),
-        if (item.desc != null)
-          Row(
-            mainAxisSize: .min,
-            children: [
-              SizedBox(width: 2),
-              Text(item.desc!, style: TextStyle(color: mutedColor)),
-            ],
-          ),
-        SizedBox(height: 1),
-      ],
+          if (component.desc != null)
+            Text(component.desc!, style: TextStyle(color: theme.outlineVariant)),
+        ],
+      ),
     );
+  }
+
+  bool _keyEvent(KeyboardEvent e) {
+    if (e.logicalKey == LogicalKey.arrowLeft) {
+      _hoverLeft();
+      return true;
+    }
+    if (e.logicalKey == LogicalKey.arrowRight) {
+      _hoverRight();
+      return true;
+    }
+    if (e.logicalKey == LogicalKey.space) {
+      _select(hoverIndex);
+      return true;
+    }
+    return false;
+  }
+
+  void _hoverLeft() {
+    if (hoverIndex <= 0) return;
+    setState(() => hoverIndex--);
+  }
+
+  void _hoverRight() {
+    if (hoverIndex >= selectorOptions.length - 1) return;
+    setState(() => hoverIndex++);
+  }
+
+  void _select(int index) {
+    var value = selectorOptions[index].value;
+    component.onValueChanged?.call(value);
+  }
+
+  List<Component> _buildOptions() {
+    List<Component> options = [];
+    for (var i = 0; i < selectorOptions.length; i++) {
+      var option = selectorOptions[i];
+      var hover = hoverIndex == i;
+      var activated = activatedIndex == i;
+      options.add(_buildOption(option, i, hover, activated));
+    }
+    return options;
+  }
+
+  Component _buildOption(
+    _Option<T> option,
+    int index,
+    bool hover,
+    bool activated,
+  ) {
+    var theme = TuiTheme.of(context);
+    return Clickable(
+      onClick: () {
+        component.onValueChanged?.call(option.value);
+      },
+      onEnter: () {
+        if (_requestFocus()) {
+          setState(() {
+            hoverIndex = index;
+          });
+        }
+      },
+      builder: (_) => Row(
+        mainAxisSize: .min,
+        children: [
+          SizedBox(
+            width: 1,
+            child: hover && focused ? Text("[") : null,
+          ),
+          Text(
+            activated ? "● " : "○ ",
+            style: TextStyle(
+              color: ((hover && focused) || activated) ? null : theme.outlineVariant,
+            ),
+          ),
+          Text(
+            option.label,
+            style: TextStyle(
+              color: ((hover && focused) || activated) ? null : theme.outlineVariant,
+            ),
+          ),
+          SizedBox(
+            width: 1,
+            child: hover && focused ? Text("]") : null,
+          ),
+        ],
+      ),
+    );
+  }
+
+  bool _requestFocus() {
+    return component.onRequestFocus?.call() ?? false;
+  }
+}
+
+class _InputField extends _SettingsField<String> {
+  _InputField({
+    required super.label,
+    super.desc,
+    super.value,
+    super.focused,
+    super.onRequestFocus,
+    super.onValueChanged,
+  });
+
+  @override
+  State<StatefulComponent> createState() => _InputFieldState();
+}
+
+class _InputFieldState extends State<_InputField> {
+  final TextEditingController controller = TextEditingController();
+
+  @override
+  void initState() {
+    if (component.value != null) {
+      controller.text = component.value!;
+    }
+  }
+
+  @override
+  Component build(BuildContext context) {
+    var theme = TuiTheme.of(context);
+    return ConstrainedBox(
+      constraints: BoxConstraints(maxWidth: 45),
+      child: Column(
+        crossAxisAlignment: .start,
+        children: [
+          Text(component.label),
+          Column(
+            children: [
+              Divider(),
+              Clickable(
+                onClick: () {
+                  _requestFocus();
+                },
+                builder: (_) => Row(
+                  mainAxisSize: .min,
+                  children: [
+                    Text("› "),
+                    Expanded(
+                      child: TextField(
+                        controller: controller,
+                        focused: component.focused,
+                        onChanged: (value) =>
+                            component.onValueChanged?.call(value),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Divider(),
+            ],
+          ),
+          if (component.desc != null)
+            Text(
+              component.desc!,
+              style: TextStyle(
+                color: theme.outlineVariant,
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  bool _requestFocus() {
+    return component.onRequestFocus?.call() ?? false;
   }
 }

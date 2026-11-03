@@ -1,4 +1,3 @@
-import 'package:bili_novel_packer/colors.dart';
 import 'package:bili_novel_packer/components/clickable.dart';
 import 'package:bili_novel_packer/components/novel_item.dart';
 import 'package:bili_novel_packer/const.dart';
@@ -54,6 +53,7 @@ class _PackerAppState extends State<PackerApp> {
   }
 
   Component _title() {
+    var theme = TuiTheme.of(context);
     return Padding(
       padding: EdgeInsets.all(1),
       child: Row(
@@ -61,7 +61,7 @@ class _PackerAppState extends State<PackerApp> {
           Text("📚 Bili Novel Packer "),
           Text(
             "($version)",
-            style: TextStyle(color: mutedColor),
+            style: TextStyle(color: theme.outlineVariant),
           ),
         ],
       ),
@@ -90,52 +90,51 @@ class _PackerAppState extends State<PackerApp> {
   }
 
   Component _input() {
+    var theme = TuiTheme.of(context);
     return Column(
       crossAxisAlignment: .start,
       children: [
-        Container(
-          color: backgroundColor,
-          padding: EdgeInsets.all(1),
-          child: Row(
-            children: [
-              Text("› "),
-              Expanded(
-                child: TextField(
-                  controller: textController,
-                  showCursor: false,
-                  focused: focused,
-                  onKeyEvent: (event) {
-                    if (event.logicalKey == LogicalKey.tab) {
-                      _toggleWorkMode();
-                      return true;
-                    }
-                    if (event.logicalKey == LogicalKey.pageUp) {
-                      scrollController.pageUp();
-                      return true;
-                    }
-                    if (event.logicalKey == LogicalKey.pageDown) {
-                      scrollController.pageDown();
-                      return true;
-                    }
-                    return false;
-                  },
-                  placeholder: "请输入链接，多个链接使用空格分开",
-                  onSubmitted: _onSubmitted,
-                  onChanged: (_) {
-                    setState(() {
-                      errMsg = null;
-                    });
-                  },
-                ),
+        Divider(),
+        Row(
+          children: [
+            Text("› "),
+            Expanded(
+              child: TextField(
+                controller: textController,
+                // showCursor: false,
+                focused: focused,
+                onKeyEvent: (event) {
+                  if (event.logicalKey == LogicalKey.tab) {
+                    _toggleWorkMode();
+                    return true;
+                  }
+                  if (event.logicalKey == LogicalKey.pageUp) {
+                    scrollController.pageUp();
+                    return true;
+                  }
+                  if (event.logicalKey == LogicalKey.pageDown) {
+                    scrollController.pageDown();
+                    return true;
+                  }
+                  return false;
+                },
+                placeholder: "请输入链接，多个链接使用空格分开",
+                onSubmitted: _onSubmitted,
+                onChanged: (_) {
+                  setState(() {
+                    errMsg = null;
+                  });
+                },
               ),
-            ],
-          ),
+            ),
+          ],
         ),
+        Divider(),
         Padding(
           padding: EdgeInsets.only(left: 3),
           child: Text(
             errMsg ?? "",
-            style: TextStyle(color: destructiveColor),
+            style: TextStyle(color: theme.error),
           ),
         ),
         // 状态栏
@@ -146,7 +145,7 @@ class _PackerAppState extends State<PackerApp> {
               Text(status.label),
               Text(
                 "($numberOfQueues 在队列)",
-                style: TextStyle(color: mutedColor),
+                style: TextStyle(color: theme.outlineVariant),
               ),
               Text(" · "),
               Clickable(
@@ -155,12 +154,12 @@ class _PackerAppState extends State<PackerApp> {
                   children: [
                     Text(
                       mode.label,
-                      style: TextStyle(color: hover ? primaryColor : null),
+                      style: TextStyle(color: hover ? theme.primary : null),
                     ),
                     Text(
                       "(Tab 切换 | ${mode.desc})",
                       style: TextStyle(
-                        color: hover ? primaryColor : mutedColor,
+                        color: hover ? theme.primary : theme.outlineVariant,
                       ),
                     ),
                   ],
