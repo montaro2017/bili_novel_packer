@@ -1,6 +1,6 @@
 name: Build & Release
 
-# Trigger on push to master branch or with a tag
+# Trigger when a version tag is pushed, or manually
 on:
   push:
     tags:
@@ -12,6 +12,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
+        target: [Windows, Linux, MacOS]
+        edition: [cli, tui]
         include:
           - target: Windows
             os: windows-latest
@@ -63,27 +65,27 @@ jobs:
       - name: Build MacOS
         if: matrix.target == 'MacOS'
         run: |
-          dart compile exe bin/main.dart -o ./bili_novel_packer-${{ steps.get_version.outputs.version }}-arm64-macos
+          dart compile exe bin/${{ matrix.edition }}.dart -o ./bili_novel_packer-${{ steps.get_version.outputs.version }}-${{ matrix.edition }}-arm64-macos
 
       # Build Windows
       - name: Build Windows
         if: matrix.target == 'Windows'
         run: |
-          dart compile exe bin/main.dart -o ./bili_novel_packer-${{ steps.get_version.outputs.version }}-x86_64-windows.exe
+          dart compile exe bin/${{ matrix.edition }}.dart -o ./bili_novel_packer-${{ steps.get_version.outputs.version }}-${{ matrix.edition }}-x86_64-windows.exe
 
       # Build Linux
       - name: Build Linux
         if: matrix.target == 'Linux'
         run: |
-          dart compile exe --target-os=linux --target-arch=x64 --output=./bili_novel_packer-${{ steps.get_version.outputs.version }}-x86_64-linux ./bin/main.dart
-          dart compile exe --target-os=linux --target-arch=arm64 --output=./bili_novel_packer-${{ steps.get_version.outputs.version }}-arm64-linux ./bin/main.dart
-          dart compile exe --target-os=linux --target-arch=riscv64 --output=./bili_novel_packer-${{ steps.get_version.outputs.version }}-riscv64-linux ./bin/main.dart
+          dart compile exe --target-os=linux --target-arch=x64 --output=./bili_novel_packer-${{ steps.get_version.outputs.version }}-${{ matrix.edition }}-x86_64-linux ./bin/${{ matrix.edition }}.dart
+          dart compile exe --target-os=linux --target-arch=arm64 --output=./bili_novel_packer-${{ steps.get_version.outputs.version }}-${{ matrix.edition }}-arm64-linux ./bin/${{ matrix.edition }}.dart
+          dart compile exe --target-os=linux --target-arch=riscv64 --output=./bili_novel_packer-${{ steps.get_version.outputs.version }}-${{ matrix.edition }}-riscv64-linux ./bin/${{ matrix.edition }}.dart
 
       # Upload Artifacts
       - name: Upload Artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ matrix.artifact_name }}
+          name: ${{ matrix.artifact_name }}-${{ matrix.edition }}
           path: ${{ matrix.artifact_path }}
 
   Publish:
@@ -91,35 +93,71 @@ jobs:
     name: Publish
     needs: Build
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-      - name: Get app version
-        id: get_version
+        with:
+          fetch-depth: 0
+      - name: Generate changelog
         shell: bash
         run: |
-          echo "version=$(head -n 3 pubspec.yaml | tail -n 1 | cut -d ' ' -f 2)" >> $GITHUB_OUTPUT
-      - name: Make tmp dir
-        run: mkdir /tmp/artifacts
+          current_tag="$GITHUB_REF_NAME"
+          previous_tag="$(git describe --tags --abbrev=0 --match 'v*' "${current_tag}^" 2>/dev/null || true)"
+          {
+            echo "## 更新内容"
+            echo
+            if [ -n "$previous_tag" ]; then
+              git log "${previous_tag}..${current_tag}" --no-merges --pretty=format:'- %s (%h)'
+              printf '\n\n**完整变更**: https://github.com/%s/compare/%s...%s\n' "$GITHUB_REPOSITORY" "$previous_tag" "$current_tag"
+            else
+              git log "$current_tag" --no-merges --pretty=format:'- %s (%h)'
+              printf '\n'
+            fi
+          } > release-notes.md
       - name: Download all Artifacts
         uses: actions/download-artifact@v4
         with:
-          path: /tmp/artifacts
-      - name: List and move all Artifacts
-        run: |
-          mkdir -p /tmp/artifacts/final
-          mv /tmp/artifacts/release-Windows/*-windows.exe /tmp/artifacts/final/
-          mv /tmp/artifacts/release-Linux/*-linux /tmp/artifacts/final/
-          mv /tmp/artifacts/release-MacOS/*-macos /tmp/artifacts/final/
-          ls -R /tmp/artifacts/final
+          pattern: release-*
+          path: /tmp/artifacts/final
+          merge-multiple: true
 
       - name: Upload to release
         uses: ncipollo/release-action@v1
         with:
           tag: ${{ github.ref_name }}
           allowUpdates: true
-          generateReleaseNotes: true
+          generateReleaseNotes: false
+          bodyFile: release-notes.md
           artifacts: /tmp/artifacts/final/*
           artifactErrorsFailBuild: true
           replacesArtifacts: true
           prerelease: true
+
+      - name: Prepare Gitee release notes
+        id: gitee_notes
+        shell: python
+        run: |
+          import os
+          import uuid
+          from pathlib import Path
+
+          body = Path("release-notes.md").read_text(encoding="utf-8")
+          delimiter = uuid.uuid4().hex
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:
+              output.write(f"body<<{delimiter}\n{body}\n{delimiter}\n")
+
+      - name: Publish to Gitee
+        uses: nicennnnnnnlee/action-gitee-release@master
+        with:
+          gitee_action: create_release
+          gitee_owner: Montaro2017
+          gitee_repo: bili_novel_packer
+          gitee_token: ${{ secrets.GITEE_TOKEN }}
+          gitee_tag_name: ${{ github.ref_name }}
+          gitee_release_name: ${{ github.ref_name }}
+          gitee_release_body: ${{ steps.gitee_notes.outputs.body }}
+          gitee_target_commitish: master
+          gitee_upload_retry_times: 3
+          gitee_files: /tmp/artifacts/final/*
