@@ -248,7 +248,7 @@ class _PackerAppState extends State<PackerApp> {
     for (var url in parts) {
       url = url.trim();
       if (url.isEmpty) continue;
-      var s = _detectSource(url);
+      var s = LightNovelSource.detectSource(url);
       if (s == null) {
         throw "不支持此链接: $url";
       } else {
@@ -258,14 +258,6 @@ class _PackerAppState extends State<PackerApp> {
     return links;
   }
 
-  LightNovelSource? _detectSource(String url) {
-    for (var source in sources) {
-      if (source.supportUrl(url)) {
-        return source;
-      }
-    }
-    return null;
-  }
 }
 
 class NovelLink {

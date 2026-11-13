@@ -81,8 +81,10 @@ class BiliNovelSource implements LightNovelSource {
     dio.interceptors.add(RateLimitInterceptor(15, Duration(minutes: 1)));
     dio.interceptors.add(
       BiliNovelRedirectInterceptor((redirectDomain) {
-       var newBaseUrl = redirectDomain.startsWith("http")? redirectDomain : "https://$redirectDomain";
-       baseUrl = newBaseUrl;
+        var newBaseUrl = redirectDomain.startsWith("http")
+            ? redirectDomain
+            : "https://$redirectDomain";
+        baseUrl = newBaseUrl;
         _updateBaseUrl(newBaseUrl);
       }),
     );
@@ -365,8 +367,8 @@ class BiliNovelSource implements LightNovelSource {
   }
 
   @override
-  bool supportUrl(String url) {
-    return _exp.hasMatch(url);
+  (bool, String?) supportUrl(String url) {
+    return (_exp.hasMatch(url), null);
   }
 
   /// 获取章节一页内容

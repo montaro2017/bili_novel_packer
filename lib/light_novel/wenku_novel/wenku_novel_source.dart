@@ -178,8 +178,8 @@ class WenkuNovelSource implements LightNovelSource {
   }
 
   @override
-  bool supportUrl(String url) {
-    return _exp1.hasMatch(url) || _exp2.hasMatch(url);
+  (bool, String?) supportUrl(String url) {
+    return (_exp1.hasMatch(url) || _exp2.hasMatch(url), null);
   }
 
   String _getId(String url) {

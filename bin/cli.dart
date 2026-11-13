@@ -4,16 +4,9 @@ import 'package:bili_novel_packer/console/selector.dart';
 import 'package:bili_novel_packer/const.dart';
 import 'package:bili_novel_packer/light_novel/base/light_novel_model.dart';
 import 'package:bili_novel_packer/light_novel/base/light_novel_source.dart';
-import 'package:bili_novel_packer/light_novel/bili_novel/bili_novel_source.dart';
-import 'package:bili_novel_packer/light_novel/wenku_novel/wenku_novel_source.dart';
 import 'package:bili_novel_packer/logger.dart';
-import 'package:bili_novel_packer/novel_packer.dart';
+import 'package:bili_novel_packer/novel_packer/novel_packer.dart';
 import 'package:bili_novel_packer/pack_settings.dart';
-
-List<LightNovelSource> sources = [
-  BiliNovelSource(),
-  WenkuNovelSource(),
-];
 
 void main(List<String> args) async {
   printWelcome();
@@ -51,7 +44,6 @@ Future<void> start() async {
 
 Future<void> runOne(String url, LightNovelSource source, bool manual) async {
   logger.i("URL: $url");
-
   console.writeLine("正在加载数据...");
   var novel = await source.getNovel(url);
   logger.i(novel);
@@ -107,7 +99,7 @@ List<(String, LightNovelSource)> readUrlSource() {
     for (var url in inputs) {
       url = url.trim();
       if (url.isEmpty) continue;
-      var s = detectSource(url);
+      var s = LightNovelSource.detectSource(url);
       if (s == null) {
         console.writeLine("不支持的URL: $url\n");
         err = true;
@@ -118,15 +110,6 @@ List<(String, LightNovelSource)> readUrlSource() {
     }
     if (!err) return pairs;
   } while (true);
-}
-
-LightNovelSource? detectSource(String url) {
-  for (var source in sources) {
-    if (source.supportUrl(url)) {
-      return source;
-    }
-  }
-  return null;
 }
 
 void printNovelDetail(Novel novel) {
@@ -178,10 +161,36 @@ Future<void> pack({
       novel: novel,
       volumes: volumes,
       option: settings,
+      onProgress: (p) {
+        if (p.phase == .resolvingVolume) {
+          logger.i("开始处理: ${p.volume!.volumeName}");
+          console.writeLine("正在处理: ${p.volume!.volumeName}");
+        } else if (p.phase == .resolvedVolume) {
+          logger.i("处理完成: ${p.volume!.volumeName}");
+        } else if (p.phase == .completed) {
+          logger.i("EPUB file: ${p.path}");
+          console.writeLine("打包完成: ${p.path}");
+          console.writeLine();
+        }
+      },
     );
   } else {
     for (var volume in volumes) {
-      await packer.packVolume(source: source, volume: volume, option: settings);
+      await packer.packVolume(
+        source: source,
+        volume: volume,
+        option: settings,
+        onProgress: (p) {
+          if (p.phase == .start) {
+            logger.i("开始打包 ${volume.volumeName}");
+            console.writeLine("开始打包 ${volume.volumeName}...");
+          } else if (p.phase == .completed) {
+            logger.i("EPUB file: ${p.path}");
+            console.writeLine("打包完成: ${p.path}");
+            console.writeLine();
+          }
+        },
+      );
     }
   }
 }

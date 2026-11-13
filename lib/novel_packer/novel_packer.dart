@@ -10,6 +10,7 @@ import 'package:bili_novel_packer/light_novel/base/light_novel_cover_detector.da
 import 'package:bili_novel_packer/light_novel/base/light_novel_model.dart';
 import 'package:bili_novel_packer/light_novel/base/light_novel_source.dart';
 import 'package:bili_novel_packer/logger.dart';
+import 'package:bili_novel_packer/novel_packer/pack_progress.dart';
 import 'package:bili_novel_packer/pack_settings.dart';
 import 'package:bili_novel_packer/util/html_util.dart';
 import 'package:bili_novel_packer/util/sequence.dart';
@@ -25,9 +26,10 @@ class NovelPacker {
     required LightNovelSource source,
     required Volume volume,
     required PackSettings option,
+    void Function(PackVolumeProgress progress)? onProgress,
   }) async {
-    console.writeLine("开始打包 ${volume.volumeName}...");
-    logger.i("开始打包 ${volume.volumeName}");
+    PackVolumeProgress progress = PackVolumeProgress(phase: .start);
+    onProgress?.call(progress);
     EpubPacker packer = EpubPacker(_getEpubVolumeName(volume));
     _fillEpubVolume(packer, volume);
     if (option.addTitle) {
@@ -38,6 +40,8 @@ class NovelPacker {
     Sequence chapterSeq = Sequence();
     Sequence imageSeq = Sequence();
     for (var chapter in volume.chapters) {
+      progress = progress.copyWith(phase: .resolvingChapter, chapter: chapter);
+      onProgress?.call(progress);
       var doc = await _resolveChapter(
         chapter: chapter,
         packer: packer,
@@ -54,6 +58,7 @@ class NovelPacker {
         title: chapter.chapterName,
         chapterContent: html,
       );
+      progress = progress.copyWith(phase: .resolvedChapter);
     }
     // 设置封面
     await _resolveCover(
@@ -64,6 +69,8 @@ class NovelPacker {
     );
     // 写出目标文件
     packer.pack();
+    progress = PackVolumeProgress(phase: .completed, path: packer.absolutePath);
+    onProgress?.call(progress);
     logger.i("EPUB file: ${packer.absolutePath}\n");
     console.writeLine("打包完成: ${packer.absolutePath}\n");
   }
@@ -103,7 +110,11 @@ class NovelPacker {
     required Novel novel,
     required List<Volume> volumes,
     required PackSettings option,
+    void Function(CombineVolumeProgress progress)? onProgress,
   }) async {
+    CombineVolumeProgress progress = CombineVolumeProgress(phase: .start);
+    onProgress?.call(progress);
+
     EpubPacker packer = EpubPacker(_getEpubCombineName(novel));
     _fillEpubCombine(packer, novel);
 
@@ -125,12 +136,21 @@ class NovelPacker {
     }
 
     for (Volume volume in volumes) {
-      logger.i("开始处理: ${volume.volumeName}");
-      console.writeLine("正在处理: ${volume.volumeName}");
-      NavPoint volumeNavPoint = NavPoint(volume.volumeName);
+      progress = CombineVolumeProgress(
+        phase: .resolvingVolume,
+        volume: volume,
+      );
+      onProgress?.call(progress);
 
+      NavPoint volumeNavPoint = NavPoint(volume.volumeName);
       for (var i = 0; i < volume.chapters.length; i++) {
         var chapter = volume.chapters[i];
+        progress = CombineVolumeProgress(
+          phase: .resolvingChapter,
+          volume: volume,
+          chapter: chapter,
+        );
+        onProgress?.call(progress);
         var doc = await _resolveChapter(
           chapter: chapter,
           packer: packer,
@@ -153,13 +173,25 @@ class NovelPacker {
         if (i == 0) {
           volumeNavPoint.src = name;
         }
+        progress = CombineVolumeProgress(
+          phase: .resolvedChapter,
+          volume: volume,
+          chapter: chapter,
+        );
       }
       packer.addNavPoint(volumeNavPoint);
-      logger.i("处理完成: ${volume.volumeName}");
+      progress = CombineVolumeProgress(
+        phase: .resolvedVolume,
+        volume: volume,
+      );
+      onProgress?.call(progress);
     }
     packer.pack();
-    logger.i("EPUB file: ${packer.absolutePath}");
-    console.writeLine("打包完成: ${packer.absolutePath}");
+    progress = CombineVolumeProgress(
+      phase: .completed,
+      path: packer.absolutePath,
+    );
+    onProgress?.call(progress);
   }
 
   String _getEpubCombineName(Novel novel) {

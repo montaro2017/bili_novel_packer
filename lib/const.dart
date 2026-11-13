@@ -6,7 +6,7 @@ import 'package:bili_novel_packer/light_novel/wenku_novel/wenku_novel_source.dar
 const String version = "0.2.50";
 const String gitUrl = "https://github.com/Montaro2017/bili_novel_packer";
 
-final List<LightNovelSource> sources = [
-  BiliNovelSource(),
-  WenkuNovelSource(),
+final List<LightNovelSource Function()> sourceFactories = [
+  () => BiliNovelSource(),
+  () => WenkuNovelSource(),
 ];
